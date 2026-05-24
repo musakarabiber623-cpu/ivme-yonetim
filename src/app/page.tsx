@@ -45,6 +45,7 @@ export default function Home() {
     { href: '/personel', icon: '👩‍🏫', baslik: 'Personel', aciklama: 'Maaş, SGK, ek ders', renk: 'hover:border-yellow-300' },
     { href: '/gelir-gider', icon: '📊', baslik: 'Gelir / Gider', aciklama: 'Kantin, giderler', renk: 'hover:border-red-300' },
     { href: '/raporlar', icon: '📈', baslik: 'Raporlar', aciklama: 'Nakit akış, özet', renk: 'hover:border-gray-300' },
+    { href: '/sms', icon: '💬', baslik: 'SMS', aciklama: 'Veli bilgilendirme, taksit, sınav', renk: 'hover:border-teal-300' },
   ]
 
   return (
