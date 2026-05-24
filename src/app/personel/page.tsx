@@ -217,7 +217,7 @@ export default function PersonelPage() {
         </div>
 
         <div className="flex gap-2 mb-6">
-          {(yetki ? ['liste', 'odeme', 'yeni'] : ['liste'] as const).map(s => (
+          {(yetki ? ['liste', 'odeme', 'yeni'] as const : ['liste'] as const).map(s => (
             <button key={s} onClick={() => setSekme(s)}
               className={`px-4 py-1.5 rounded-full text-sm font-medium border transition-all ${
                 sekme === s ? 'bg-gray-800 text-white border-gray-800' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'
