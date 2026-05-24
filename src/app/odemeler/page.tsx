@@ -6,6 +6,7 @@ import AdminPanel from '@/components/AdminPanel'
 
 type Taksit = {
   id: number
+  odeme_plan_id: number
   taksit_no: number
   tutar: number
   vade_tarihi: string
@@ -33,6 +34,7 @@ export default function OdemelerPage() {
     makbuz: '',
   })
   const [tahsilYukleniyor, setTahsilYukleniyor] = useState(false)
+  const [tahsilPlanId, setTahsilPlanId] = useState<number | null>(null)
   const [yetki, setYetki] = useState(false)
 
   useEffect(() => { getir() }, [])
@@ -40,7 +42,7 @@ export default function OdemelerPage() {
   async function getir() {
     const { data } = await supabase
       .from('taksitler')
-      .select('*, odeme_planlari(odeme_turu, donem, ogrenciler(id, ad_soyad, sinif))')
+      .select('*, odeme_plan_id, odeme_planlari(odeme_turu, donem, ogrenciler(id, ad_soyad, sinif))')
       .order('vade_tarihi', { ascending: false })
     setTaksitler(data || [])
     setYukleniyor(false)
@@ -48,6 +50,7 @@ export default function OdemelerPage() {
 
   function tahsilAc(t: Taksit) {
     setTahsilId(t.id)
+    setTahsilPlanId(t.odeme_plan_id)
     setTahsilTutar(String(t.tutar))
     setTahsilForm({
       tarih: new Date().toISOString().split('T')[0],
@@ -57,36 +60,65 @@ export default function OdemelerPage() {
   }
 
   async function tahsilEt() {
-    if (!tahsilId) return
+    if (!tahsilId || !tahsilPlanId) return
+    const tutar = parseFloat(tahsilTutar)
+    if (!tutar || tutar <= 0) { alert('Geçerli bir tutar giriniz.'); return }
     setTahsilYukleniyor(true)
-    const { error } = await supabase.from('taksitler').update({
-      durum: 'odendi',
-      tutar: parseFloat(tahsilTutar),
-      odeme_tarihi: tahsilForm.tarih,
-      odeme_yontemi: tahsilForm.yontem,
-      makbuz_no: tahsilForm.makbuz || null,
-    }).eq('id', tahsilId)
-    if (error) { alert('Hata: ' + error.message); setTahsilYukleniyor(false); return }
+
+    const { data: odenmemis } = await supabase
+      .from('taksitler')
+      .select('id, tutar')
+      .eq('odeme_plan_id', tahsilPlanId)
+      .neq('durum', 'odendi')
+      .order('taksit_no', { ascending: true })
+
+    let kalan = tutar
+    for (const t of (odenmemis || [])) {
+      if (kalan <= 0) break
+      if (kalan >= t.tutar) {
+        const { error } = await supabase.from('taksitler').update({
+          durum: 'odendi',
+          odeme_tarihi: tahsilForm.tarih,
+          odeme_yontemi: tahsilForm.yontem,
+          makbuz_no: tahsilForm.makbuz || null,
+        }).eq('id', t.id)
+        if (error) { alert('Hata: ' + error.message); setTahsilYukleniyor(false); return }
+        kalan -= t.tutar
+      } else {
+        await supabase.from('taksitler').update({ tutar: t.tutar - kalan }).eq('id', t.id)
+        kalan = 0
+      }
+    }
+
     setTahsilId(null)
+    setTahsilPlanId(null)
     getir()
     setTahsilYukleniyor(false)
   }
 
+  const bugun = new Date(); bugun.setHours(0, 0, 0, 0)
+  const hesaplaDurum = (t: Taksit) => {
+    if (t.durum === 'odendi') return 'odendi'
+    return new Date(t.vade_tarihi) < bugun ? 'gecikti' : 'bekliyor'
+  }
+
   const filtrelendi = taksitler.filter(t => {
-    const durumUygun = durum === 'hepsi' || t.durum === durum
+    const hesaplananDurum = hesaplaDurum(t)
+    const durumUygun = durum === 'hepsi' || hesaplananDurum === durum
     const adSoyad = t.odeme_planlari?.ogrenciler?.ad_soyad?.toLowerCase() || ''
     const aramaUygun = !arama || adSoyad.includes(arama.toLowerCase())
     return durumUygun && aramaUygun
   })
 
-  const toplamBeklenen = taksitler.filter(t => t.durum !== 'odendi').reduce((s, t) => s + t.tutar, 0)
-  const toplamGeciken = taksitler.filter(t => t.durum === 'gecikti').reduce((s, t) => s + t.tutar, 0)
+  const toplamBeklenen = taksitler.filter(t => t.durum !== 'odendi' && new Date(t.vade_tarihi) >= bugun).reduce((s, t) => s + t.tutar, 0)
+  const toplamGeciken = taksitler.filter(t => t.durum !== 'odendi' && new Date(t.vade_tarihi) < bugun).reduce((s, t) => s + t.tutar, 0)
   const buAyTahsil = taksitler.filter(t => {
     if (t.durum !== 'odendi' || !t.odeme_tarihi) return false
     return t.odeme_tarihi.startsWith(new Date().toISOString().slice(0, 7))
   }).reduce((s, t) => s + t.tutar, 0)
 
-  const durumRenk = (d: string) => {
+  const durumRenk = (t: Taksit) => {
+    const d = hesaplaDurum(t)
     if (d === 'odendi') return 'bg-green-100 text-green-700'
     if (d === 'gecikti') return 'bg-red-100 text-red-700'
     return 'bg-orange-100 text-orange-700'
@@ -235,8 +267,8 @@ export default function OdemelerPage() {
                     <td className="px-4 py-3 font-semibold text-gray-800">₺{t.tutar.toLocaleString('tr-TR')}</td>
                     <td className="px-4 py-3 text-gray-600">{new Date(t.vade_tarihi).toLocaleDateString('tr-TR')}</td>
                     <td className="px-4 py-3">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${durumRenk(t.durum)}`}>
-                        {t.durum === 'odendi' ? 'Ödendi' : t.durum === 'gecikti' ? 'Gecikti' : 'Bekliyor'}
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${durumRenk(t)}`}>
+                        {hesaplaDurum(t) === 'odendi' ? 'Ödendi' : hesaplaDurum(t) === 'gecikti' ? 'Gecikti' : 'Bekliyor'}
                       </span>
                     </td>
                     <td className="px-4 py-3">

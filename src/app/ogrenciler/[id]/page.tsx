@@ -59,6 +59,8 @@ export default function OgrenciDetayPage() {
   const [sekme, setSekme] = useState<'genel' | 'odemeler' | 'sinavlar'>('odemeler')
 
   const [tahsilId, setTahsilId] = useState<number | null>(null)
+  const [tahsilPlanId, setTahsilPlanId] = useState<number | null>(null)
+  const [tahsilTutar, setTahsilTutar] = useState('')
   const [tahsilForm, setTahsilForm] = useState({
     tarih: new Date().toISOString().split('T')[0],
     yontem: 'nakit',
@@ -83,15 +85,38 @@ export default function OgrenciDetayPage() {
   }
 
   async function tahsilEt() {
-    if (!tahsilId) return
+    if (!tahsilId || !tahsilPlanId) return
+    const tutar = parseFloat(tahsilTutar)
+    if (!tutar || tutar <= 0) { alert('Geçerli bir tutar giriniz.'); return }
     setTahsilYukleniyor(true)
-    const { error } = await supabase.from('taksitler').update({
-      durum: 'odendi',
-      odeme_tarihi: tahsilForm.tarih,
-      odeme_yontemi: tahsilForm.yontem,
-    }).eq('id', tahsilId)
-    if (error) { alert('Hata: ' + error.message); setTahsilYukleniyor(false); return }
+
+    const { data: odenmemis } = await supabase
+      .from('taksitler')
+      .select('id, tutar')
+      .eq('odeme_plan_id', tahsilPlanId)
+      .neq('durum', 'odendi')
+      .order('taksit_no', { ascending: true })
+
+    let kalan = tutar
+    for (const t of (odenmemis || [])) {
+      if (kalan <= 0) break
+      if (kalan >= t.tutar) {
+        const { error } = await supabase.from('taksitler').update({
+          durum: 'odendi',
+          odeme_tarihi: tahsilForm.tarih,
+          odeme_yontemi: tahsilForm.yontem,
+        }).eq('id', t.id)
+        if (error) { alert('Hata: ' + error.message); setTahsilYukleniyor(false); return }
+        kalan -= t.tutar
+      } else {
+        // Kısmi ödeme: taksit bakiyesi düşürülür, bekliyor kalır
+        await supabase.from('taksitler').update({ tutar: t.tutar - kalan }).eq('id', t.id)
+        kalan = 0
+      }
+    }
+
     setTahsilId(null)
+    setTahsilPlanId(null)
     getir()
     setTahsilYukleniyor(false)
   }
@@ -100,22 +125,28 @@ export default function OgrenciDetayPage() {
   if (!ogrenci) return <main className="min-h-screen bg-gray-50 p-8"><p className="text-gray-400">Öğrenci bulunamadı.</p></main>
 
   const tumTaksitler = planlar.flatMap(p => p.taksitler || [])
+  const bugun = new Date(); bugun.setHours(0, 0, 0, 0)
   const toplamBorc = tumTaksitler.reduce((s, t) => s + t.tutar, 0)
   const odenen = tumTaksitler.filter(t => t.durum === 'odendi').reduce((s, t) => s + t.tutar, 0)
   const kalan = tumTaksitler.filter(t => t.durum !== 'odendi').reduce((s, t) => s + t.tutar, 0)
   const odenenSayisi = tumTaksitler.filter(t => t.durum === 'odendi').length
-  const bekleyenSayisi = tumTaksitler.filter(t => t.durum === 'bekliyor').length
-  const gecikenSayisi = tumTaksitler.filter(t => t.durum === 'gecikti').length
+  const bekleyenSayisi = tumTaksitler.filter(t => t.durum !== 'odendi' && new Date(t.vade_tarihi) >= bugun).length
+  const gecikenSayisi = tumTaksitler.filter(t => t.durum !== 'odendi' && new Date(t.vade_tarihi) < bugun).length
 
   const enIyiNet = sonuclar.length > 0 ? Math.max(...sonuclar.map(s => s.net_puan || 0)) : null
   const ortNet = sonuclar.length > 0
     ? Math.round(sonuclar.reduce((s, r) => s + (r.net_puan || 0), 0) / sonuclar.length * 100) / 100
     : null
 
-  const durumRenk = (d: string) => {
-    if (d === 'odendi') return 'bg-green-100 text-green-700'
-    if (d === 'gecikti') return 'bg-red-100 text-red-700'
+  const durumRenk = (t: Taksit) => {
+    if (t.durum === 'odendi') return 'bg-green-100 text-green-700'
+    if (new Date(t.vade_tarihi) < bugun) return 'bg-red-100 text-red-700'
     return 'bg-orange-100 text-orange-700'
+  }
+  const durumYazi = (t: Taksit) => {
+    if (t.durum === 'odendi') return 'Ödendi'
+    if (new Date(t.vade_tarihi) < bugun) return 'Gecikti'
+    return 'Bekliyor'
   }
 
   return (
@@ -125,8 +156,15 @@ export default function OgrenciDetayPage() {
         {tahsilId !== null && (
           <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
             <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-sm">
-              <h2 className="font-semibold text-gray-800 mb-4">Tahsilat Al</h2>
+              <h2 className="font-semibold text-gray-800 mb-1">Tahsilat Al</h2>
+              <p className="text-xs text-gray-400 mb-4">Tutar birden fazla taksiti kapsıyorsa otomatik işlenir</p>
               <div className="space-y-3">
+                <div>
+                  <label className="text-sm text-gray-500">Tahsilat Tutarı (₺)</label>
+                  <input type="number" value={tahsilTutar}
+                    onChange={e => setTahsilTutar(e.target.value)}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 mt-1 text-sm focus:outline-none focus:border-blue-400" />
+                </div>
                 <div>
                   <label className="text-sm text-gray-500">Ödeme Tarihi</label>
                   <input type="date" value={tahsilForm.tarih}
@@ -149,7 +187,7 @@ export default function OgrenciDetayPage() {
                   className="flex-1 bg-green-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50">
                   {tahsilYukleniyor ? 'Kaydediliyor...' : 'Tahsil Et'}
                 </button>
-                <button onClick={() => setTahsilId(null)}
+                <button onClick={() => { setTahsilId(null); setTahsilPlanId(null) }}
                   className="flex-1 bg-gray-100 text-gray-700 py-2 rounded-lg text-sm font-medium hover:bg-gray-200">
                   İptal
                 </button>
@@ -260,8 +298,8 @@ export default function OgrenciDetayPage() {
                           <td className="px-4 py-3 font-semibold text-gray-800">₺{t.tutar.toLocaleString('tr-TR')}</td>
                           <td className="px-4 py-3 text-gray-600">{new Date(t.vade_tarihi).toLocaleDateString('tr-TR')}</td>
                           <td className="px-4 py-3">
-                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${durumRenk(t.durum)}`}>
-                              {t.durum === 'odendi' ? 'Ödendi' : t.durum === 'gecikti' ? 'Gecikti' : 'Bekliyor'}
+                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${durumRenk(t)}`}>
+                              {durumYazi(t)}
                             </span>
                           </td>
                           <td className="px-4 py-3 text-gray-500 text-xs">
@@ -271,7 +309,12 @@ export default function OgrenciDetayPage() {
                           </td>
                           <td className="px-4 py-3">
                             {t.durum !== 'odendi' && (
-                              <button onClick={() => { setTahsilId(t.id); setTahsilForm({ tarih: new Date().toISOString().split('T')[0], yontem: 'nakit' }) }}
+                              <button onClick={() => {
+                                setTahsilId(t.id)
+                                setTahsilPlanId(plan.id)
+                                setTahsilTutar(String(t.tutar))
+                                setTahsilForm({ tarih: new Date().toISOString().split('T')[0], yontem: 'nakit' })
+                              }}
                                 className="text-xs bg-green-50 text-green-700 border border-green-200 px-3 py-1 rounded-lg hover:bg-green-100">
                                 Tahsil Et
                               </button>

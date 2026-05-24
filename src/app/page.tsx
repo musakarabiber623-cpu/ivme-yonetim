@@ -19,6 +19,7 @@ export default function Home() {
   useEffect(() => {
     async function getir() {
       const buAy = new Date().toISOString().slice(0, 7)
+      const bugun = new Date().toISOString().split('T')[0]
 
       const [
         ogrenci, tahsil, bekleyen, geciken,
@@ -26,8 +27,8 @@ export default function Home() {
       ] = await Promise.all([
         supabase.from('ogrenciler').select('id', { count: 'exact' }).eq('aktif', true),
         supabase.from('taksitler').select('tutar').eq('durum', 'odendi').like('odeme_tarihi', `${buAy}%`),
-        supabase.from('taksitler').select('tutar').eq('durum', 'bekliyor'),
-        supabase.from('taksitler').select('tutar').eq('durum', 'gecikti'),
+        supabase.from('taksitler').select('tutar').neq('durum', 'odendi').gte('vade_tarihi', bugun),
+        supabase.from('taksitler').select('tutar').neq('durum', 'odendi').lt('vade_tarihi', bugun),
         supabase.from('gelir_gider').select('tutar').eq('tur', 'gelir').not('kategori', 'in', `(${KANTIN_KATEGORILERI.join(',')})`),
         supabase.from('gelir_gider').select('tutar').eq('tur', 'gider').not('kategori', 'in', `(${KANTIN_KATEGORILERI.join(',')})`),
         supabase.from('banka_hareketleri').select('tutar').eq('tur', 'gelir'),

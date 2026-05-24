@@ -65,14 +65,15 @@ export default function YeniOgrenciPage() {
 
     if (planForm.aktif && planForm.toplam_ucret) {
       const taksitSayisi = pesin ? 1 : parseInt(planForm.taksit_sayisi)
-      const taksitTutari = parseFloat(planForm.toplam_ucret) / taksitSayisi
+      const toplamUcret = parseFloat(planForm.toplam_ucret)
+      const base = Math.floor(toplamUcret / taksitSayisi)
 
       const { data: plan, error: planHata } = await supabase
         .from('odeme_planlari')
         .insert({
           ogrenci_id: ogrenci.id,
           odeme_turu: planForm.odeme_turu,
-          toplam_ucret: parseFloat(planForm.toplam_ucret),
+          toplam_ucret: toplamUcret,
           donem: planForm.donem,
           baslangic_tarihi: pesin ? planForm.odeme_tarihi : planForm.baslangic_tarihi,
         })
@@ -91,10 +92,12 @@ export default function YeniOgrenciPage() {
           vade.setMonth(vade.getMonth() + i)
           vadeTarihi = vade.toISOString().split('T')[0]
         }
+        // Son taksit artığı alır — toplam tutar korunur, ondalık olmaz
+        const tutar = i === taksitSayisi - 1 ? toplamUcret - base * (taksitSayisi - 1) : base
         taksitler.push({
           odeme_plan_id: plan.id,
           taksit_no: i + 1,
-          tutar: Math.round(taksitTutari * 100) / 100,
+          tutar,
           vade_tarihi: vadeTarihi,
           durum: 'bekliyor',
         })
@@ -110,8 +113,11 @@ export default function YeniOgrenciPage() {
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
   const setP = (k: string, v: string) => setPlanForm(f => ({ ...f, [k]: v }))
 
-  const taksitTutari = planForm.toplam_ucret && planForm.taksit_sayisi && !pesin
-    ? (parseFloat(planForm.toplam_ucret) / parseInt(planForm.taksit_sayisi)).toFixed(2)
+  const taksitBase = planForm.toplam_ucret && planForm.taksit_sayisi && !pesin
+    ? Math.floor(parseFloat(planForm.toplam_ucret) / parseInt(planForm.taksit_sayisi))
+    : null
+  const taksitSon = taksitBase && planForm.toplam_ucret && planForm.taksit_sayisi
+    ? parseFloat(planForm.toplam_ucret) - taksitBase * (parseInt(planForm.taksit_sayisi) - 1)
     : null
 
   return (
@@ -245,9 +251,10 @@ export default function YeniOgrenciPage() {
                   </div>
                 )}
               </div>
-              {taksitTutari && (
+              {taksitBase && (
                 <div className="bg-blue-50 rounded-lg px-4 py-3 text-sm text-blue-700">
-                  Her taksit: <strong>₺{parseFloat(taksitTutari).toLocaleString('tr-TR')}</strong>
+                  Her taksit: <strong>₺{taksitBase.toLocaleString('tr-TR')}</strong>
+                  {taksitSon !== taksitBase && <span className="text-blue-500 ml-2">(son taksit: ₺{taksitSon?.toLocaleString('tr-TR')})</span>}
                 </div>
               )}
               <div>
