@@ -3,12 +3,16 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
 
+const KANTIN_KATEGORILERI = ['kantin_geliri', 'kantin_alis']
+
 export default function Home() {
   const [istatistik, setIstatistik] = useState({
     toplamOgrenci: 0,
     buAyTahsilat: 0,
     bekleyenTaksit: 0,
     gecikenTaksit: 0,
+    toplamGelir: 0,
+    toplamGider: 0,
   })
   const [yukleniyor, setYukleniyor] = useState(true)
 
@@ -16,27 +20,50 @@ export default function Home() {
     async function getir() {
       const buAy = new Date().toISOString().slice(0, 7)
 
-      const [ogrenci, tahsil, bekleyen, geciken] = await Promise.all([
+      const [
+        ogrenci, tahsil, bekleyen, geciken,
+        ggGelir, ggGider, bankaGelir, bankaGider, taksitGelir, personelGider
+      ] = await Promise.all([
         supabase.from('ogrenciler').select('id', { count: 'exact' }).eq('aktif', true),
         supabase.from('taksitler').select('tutar').eq('durum', 'odendi').like('odeme_tarihi', `${buAy}%`),
         supabase.from('taksitler').select('tutar').eq('durum', 'bekliyor'),
         supabase.from('taksitler').select('tutar').eq('durum', 'gecikti'),
+        supabase.from('gelir_gider').select('tutar').eq('tur', 'gelir').not('kategori', 'in', `(${KANTIN_KATEGORILERI.join(',')})`),
+        supabase.from('gelir_gider').select('tutar').eq('tur', 'gider').not('kategori', 'in', `(${KANTIN_KATEGORILERI.join(',')})`),
+        supabase.from('banka_hareketleri').select('tutar').eq('tur', 'gelir'),
+        supabase.from('banka_hareketleri').select('tutar').eq('tur', 'gider'),
+        supabase.from('taksitler').select('tutar').eq('durum', 'odendi'),
+        supabase.from('personel_odemeler').select('brut_tutar, sgk_isveren'),
       ])
 
       const toplamTahsil = (tahsil.data || []).reduce((s, t) => s + t.tutar, 0)
       const toplamBekleyen = (bekleyen.data || []).reduce((s, t) => s + t.tutar, 0)
       const toplamGeciken = (geciken.data || []).reduce((s, t) => s + t.tutar, 0)
 
+      const toplamGelir =
+        (taksitGelir.data || []).reduce((s, t) => s + t.tutar, 0) +
+        (ggGelir.data || []).reduce((s, r) => s + r.tutar, 0) +
+        (bankaGelir.data || []).reduce((s, r) => s + r.tutar, 0)
+
+      const toplamGider =
+        (personelGider.data || []).reduce((s, r) => s + r.brut_tutar + (r.sgk_isveren || 0), 0) +
+        (ggGider.data || []).reduce((s, r) => s + r.tutar, 0) +
+        (bankaGider.data || []).reduce((s, r) => s + r.tutar, 0)
+
       setIstatistik({
         toplamOgrenci: ogrenci.count || 0,
         buAyTahsilat: toplamTahsil,
         bekleyenTaksit: toplamBekleyen,
         gecikenTaksit: toplamGeciken,
+        toplamGelir,
+        toplamGider,
       })
       setYukleniyor(false)
     }
     getir()
   }, [])
+
+  const net = istatistik.toplamGelir - istatistik.toplamGider
 
   const menuler = [
     { href: '/ogrenciler', icon: '👨‍🎓', baslik: 'Öğrenciler', aciklama: 'Kayıt, listeleme, detay', renk: 'hover:border-blue-300' },
@@ -44,7 +71,8 @@ export default function Home() {
     { href: '/sinavlar', icon: '📝', baslik: 'Sınavlar', aciklama: 'Deneme sonuçları', renk: 'hover:border-purple-300' },
     { href: '/personel', icon: '👩‍🏫', baslik: 'Personel', aciklama: 'Maaş, SGK, ek ders', renk: 'hover:border-yellow-300' },
     { href: '/kantin', icon: '🏪', baslik: 'Kantin', aciklama: 'Kantin gelir ve giderleri', renk: 'hover:border-orange-300' },
-    { href: '/gelir-gider', icon: '📊', baslik: 'Gelir / Gider', aciklama: 'Kurum giderleri, diğer gelirler', renk: 'hover:border-red-300' },
+    { href: '/banka', icon: '🏦', baslik: 'Banka', aciklama: 'Banka gelir ve giderleri', renk: 'hover:border-cyan-300' },
+    { href: '/gelir-gider', icon: '📊', baslik: 'Gelir / Gider', aciklama: 'Kurum giderleri, faturalar', renk: 'hover:border-red-300' },
     { href: '/raporlar', icon: '📈', baslik: 'Raporlar', aciklama: 'Nakit akış, özet', renk: 'hover:border-gray-300' },
     { href: '/sms', icon: '💬', baslik: 'SMS', aciklama: 'Veli bilgilendirme, taksit, sınav', renk: 'hover:border-teal-300' },
   ]
@@ -58,7 +86,7 @@ export default function Home() {
           <p className="text-gray-500 mt-1">Yönetim Paneli</p>
         </div>
 
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-4 mb-6">
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-4 mb-4">
           <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
             <p className="text-sm text-gray-500">Toplam Öğrenci</p>
             <p className="text-3xl font-bold text-gray-800 mt-1">
@@ -81,6 +109,27 @@ export default function Home() {
             <p className="text-sm text-gray-500">Geciken Taksit</p>
             <p className="text-3xl font-bold text-red-500 mt-1">
               {yukleniyor ? '...' : `₺${istatistik.gecikenTaksit.toLocaleString('tr-TR')}`}
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-3 gap-4 mb-6">
+          <div className="bg-white rounded-xl p-5 shadow-sm border border-green-100">
+            <p className="text-sm text-gray-500">Toplam Gelir <span className="text-xs text-gray-400">(kantin hariç)</span></p>
+            <p className="text-2xl font-bold text-green-600 mt-1">
+              {yukleniyor ? '...' : `₺${istatistik.toplamGelir.toLocaleString('tr-TR')}`}
+            </p>
+          </div>
+          <div className="bg-white rounded-xl p-5 shadow-sm border border-red-100">
+            <p className="text-sm text-gray-500">Toplam Gider <span className="text-xs text-gray-400">(kantin hariç)</span></p>
+            <p className="text-2xl font-bold text-red-500 mt-1">
+              {yukleniyor ? '...' : `₺${istatistik.toplamGider.toLocaleString('tr-TR')}`}
+            </p>
+          </div>
+          <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+            <p className="text-sm text-gray-500">Net Bakiye</p>
+            <p className={`text-2xl font-bold mt-1 ${net >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
+              {yukleniyor ? '...' : `₺${net.toLocaleString('tr-TR')}`}
             </p>
           </div>
         </div>

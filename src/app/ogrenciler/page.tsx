@@ -18,6 +18,7 @@ export default function OgrencilerPage() {
   const [yukleniyor, setYukleniyor] = useState(true)
   const [arama, setArama] = useState('')
   const [filtre, setFiltre] = useState('hepsi')
+  const [sinifFiltre, setSinifFiltre] = useState(0)
   const [duzenleId, setDuzenleId] = useState<number | null>(null)
   const [duzenleForm, setDuzenleForm] = useState({ ad_soyad: '', sinif: '5', ogrenci_tipi: 'kurs', kayit_tarihi: '' })
   const [islem, setIslem] = useState(false)
@@ -29,6 +30,7 @@ export default function OgrencilerPage() {
       .from('ogrenciler')
       .select('*, veliler(ad_soyad, telefon)')
       .eq('aktif', true)
+      .order('sinif')
       .order('ad_soyad')
     setOgrenciler(data || [])
     setYukleniyor(false)
@@ -71,8 +73,14 @@ export default function OgrencilerPage() {
   const filtrelendi = ogrenciler.filter(o => {
     const aramaUygun = o.ad_soyad.toLowerCase().includes(arama.toLowerCase())
     const filtreUygun = filtre === 'hepsi' || o.ogrenci_tipi === filtre
-    return aramaUygun && filtreUygun
+    const sinifUygun = sinifFiltre === 0 || o.sinif === sinifFiltre
+    return aramaUygun && filtreUygun && sinifUygun
   })
+
+  const sinifSayilari = [2,3,4,5,6,7,8].map(s => ({
+    sinif: s,
+    sayi: ogrenciler.filter(o => o.sinif === s).length
+  }))
 
   return (
     <main className="min-h-screen bg-gray-50 p-8">
@@ -136,7 +144,7 @@ export default function OgrencilerPage() {
           </Link>
         </div>
 
-        <div className="flex gap-3 mb-4">
+        <div className="flex gap-3 mb-3">
           <input
             type="text"
             placeholder="İsme göre ara..."
@@ -145,7 +153,7 @@ export default function OgrencilerPage() {
             className="flex-1 bg-white border border-gray-200 rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-blue-400"
           />
           <div className="flex gap-2">
-            {['hepsi', 'kurs', 'deneme_kulubu'].map(f => (
+            {(['hepsi', 'kurs', 'deneme_kulubu'] as const).map(f => (
               <button key={f} onClick={() => setFiltre(f)}
                 className={`px-4 py-2 rounded-lg text-sm font-medium border transition-all ${
                   filtre === f ? 'bg-gray-800 text-white border-gray-800' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'
@@ -154,6 +162,24 @@ export default function OgrencilerPage() {
               </button>
             ))}
           </div>
+        </div>
+
+        <div className="flex flex-wrap gap-2 mb-4">
+          <button onClick={() => setSinifFiltre(0)}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-all ${
+              sinifFiltre === 0 ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300'
+            }`}>
+            Tüm Sınıflar
+          </button>
+          {sinifSayilari.map(({ sinif, sayi }) => (
+            <button key={sinif} onClick={() => setSinifFiltre(sinif)}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-all ${
+                sinifFiltre === sinif ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300'
+              }`}>
+              {sinif}. Sınıf
+              {sayi > 0 && <span className={`ml-1.5 text-xs px-1.5 py-0.5 rounded-full ${sinifFiltre === sinif ? 'bg-blue-500' : 'bg-gray-100 text-gray-500'}`}>{sayi}</span>}
+            </button>
+          ))}
         </div>
 
         {yukleniyor ? (
