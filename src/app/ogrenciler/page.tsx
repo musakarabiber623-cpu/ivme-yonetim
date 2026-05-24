@@ -12,6 +12,7 @@ type Ogrenci = {
   aktif: boolean
   kayit_tarihi: string
   veliler: { ad_soyad: string; telefon: string } | null
+  odeme_planlari?: { id: number; toplam_ucret: number; taksitler: { durum: string }[] }[]
 }
 
 export default function OgrencilerPage() {
@@ -22,7 +23,10 @@ export default function OgrencilerPage() {
   const [sinifFiltre, setSinifFiltre] = useState(0)
   const [yetki, setYetki] = useState(false)
   const [duzenleId, setDuzenleId] = useState<number | null>(null)
-  const [duzenleForm, setDuzenleForm] = useState({ ad_soyad: '', sinif: '5', ogrenci_tipi: 'kurs', kayit_tarihi: '' })
+  const [duzenleForm, setDuzenleForm] = useState({
+    ad_soyad: '', sinif: '5', ogrenci_tipi: 'kurs', kayit_tarihi: '',
+    plan_id: null as number | null, toplam_ucret: '',
+  })
   const [islem, setIslem] = useState(false)
 
   useEffect(() => { getir() }, [])
@@ -30,27 +34,39 @@ export default function OgrencilerPage() {
   async function getir() {
     const { data } = await supabase
       .from('ogrenciler')
-      .select('*, veliler(ad_soyad, telefon)')
+      .select('*, veliler(ad_soyad, telefon), odeme_planlari(id, toplam_ucret, taksitler(durum))')
       .eq('aktif', true)
       .order('sinif')
       .order('ad_soyad')
-    setOgrenciler(data || [])
+    setOgrenciler((data || []) as Ogrenci[])
     setYukleniyor(false)
+  }
+
+  function odenmeBitti(o: Ogrenci): boolean {
+    const plans = o.odeme_planlari || []
+    if (plans.length === 0) return false
+    const tumTaksitler = plans.flatMap(p => p.taksitler || [])
+    if (tumTaksitler.length === 0) return false
+    return tumTaksitler.every(t => t.durum === 'odendi')
   }
 
   function duzenleAc(o: Ogrenci) {
     setDuzenleId(o.id)
+    const plan = o.odeme_planlari?.[0]
     setDuzenleForm({
       ad_soyad: o.ad_soyad,
       sinif: String(o.sinif),
       ogrenci_tipi: o.ogrenci_tipi,
       kayit_tarihi: o.kayit_tarihi,
+      plan_id: plan?.id ?? null,
+      toplam_ucret: plan ? String(plan.toplam_ucret) : '',
     })
   }
 
   async function guncelle() {
     if (!duzenleForm.ad_soyad) return
     setIslem(true)
+
     const { error } = await supabase.from('ogrenciler').update({
       ad_soyad: duzenleForm.ad_soyad,
       sinif: parseInt(duzenleForm.sinif),
@@ -58,6 +74,29 @@ export default function OgrencilerPage() {
       kayit_tarihi: duzenleForm.kayit_tarihi,
     }).eq('id', duzenleId)
     if (error) { alert('Hata: ' + error.message); setIslem(false); return }
+
+    if (duzenleForm.plan_id && duzenleForm.toplam_ucret) {
+      const yeniUcret = parseFloat(duzenleForm.toplam_ucret)
+      if (yeniUcret > 0) {
+        await supabase.from('odeme_planlari').update({ toplam_ucret: yeniUcret }).eq('id', duzenleForm.plan_id)
+
+        const { data: taksitler } = await supabase
+          .from('taksitler').select('id, taksit_no')
+          .eq('odeme_plan_id', duzenleForm.plan_id).order('taksit_no')
+
+        if (taksitler && taksitler.length > 0) {
+          const cnt = taksitler.length
+          const base = Math.floor(yeniUcret / cnt)
+          const son = Math.round(yeniUcret - base * (cnt - 1))
+          for (let i = 0; i < cnt; i++) {
+            await supabase.from('taksitler')
+              .update({ tutar: i === cnt - 1 ? son : base })
+              .eq('id', taksitler[i].id)
+          }
+        }
+      }
+    }
+
     setDuzenleId(null)
     getir()
     setIslem(false)
@@ -120,6 +159,14 @@ export default function OgrencilerPage() {
                   <input type="date" value={duzenleForm.kayit_tarihi} onChange={e => setD('kayit_tarihi', e.target.value)}
                     className="w-full border border-gray-200 rounded-lg px-3 py-2 mt-1 text-sm focus:outline-none focus:border-blue-400" />
                 </div>
+                {duzenleForm.plan_id && (
+                  <div>
+                    <label className="text-sm text-gray-500">Toplam Ücret (₺)</label>
+                    <input type="number" value={duzenleForm.toplam_ucret} onChange={e => setD('toplam_ucret', e.target.value)}
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 mt-1 text-sm focus:outline-none focus:border-blue-400" />
+                    <p className="text-xs text-gray-400 mt-1">Değiştirilirse taksit tutarları otomatik güncellenir</p>
+                  </div>
+                )}
               </div>
               <div className="flex gap-2 mt-4">
                 <button onClick={guncelle} disabled={islem}
@@ -153,10 +200,8 @@ export default function OgrencilerPage() {
 
         <div className="flex gap-3 mb-3">
           <input
-            type="text"
-            placeholder="İsme göre ara..."
-            value={arama}
-            onChange={e => setArama(e.target.value)}
+            type="text" placeholder="İsme göre ara..."
+            value={arama} onChange={e => setArama(e.target.value)}
             className="flex-1 bg-white border border-gray-200 rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-blue-400"
           />
           <div className="flex gap-2">
@@ -207,41 +252,49 @@ export default function OgrencilerPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtrelendi.map((o, i) => (
-                  <tr key={o.id} className={`${i % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-blue-50 transition-colors`}>
-                    <td className="px-4 py-3 font-medium text-gray-800">{o.ad_soyad}</td>
-                    <td className="px-4 py-3 text-gray-600">{o.sinif}. Sınıf</td>
-                    <td className="px-4 py-3">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        o.ogrenci_tipi === 'kurs' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'
-                      }`}>
-                        {o.ogrenci_tipi === 'kurs' ? 'Kurs' : 'Deneme Kulübü'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-gray-600">{o.veliler?.ad_soyad || '-'}</td>
-                    <td className="px-4 py-3 text-gray-600">{o.veliler?.telefon || '-'}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex gap-2">
-                        <Link href={`/ogrenciler/${o.id}`}
-                          className="text-xs bg-gray-100 text-gray-600 px-3 py-1 rounded-lg hover:bg-blue-100 hover:text-blue-700">
-                          Detay
-                        </Link>
-                        {yetki && (
-                          <>
-                            <button onClick={() => duzenleAc(o)}
-                              className="text-xs bg-yellow-50 text-yellow-700 border border-yellow-200 px-3 py-1 rounded-lg hover:bg-yellow-100">
-                              Düzenle
-                            </button>
-                            <button onClick={() => sil(o.id, o.ad_soyad)}
-                              className="text-xs bg-red-50 text-red-600 border border-red-200 px-3 py-1 rounded-lg hover:bg-red-100">
-                              Sil
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                {filtrelendi.map((o, i) => {
+                  const tamOdendi = odenmeBitti(o)
+                  return (
+                    <tr key={o.id} className={`transition-colors ${
+                      tamOdendi ? 'bg-green-50 hover:bg-green-100' : i % 2 === 0 ? 'bg-white hover:bg-blue-50' : 'bg-gray-50 hover:bg-blue-50'
+                    }`}>
+                      <td className="px-4 py-3 font-medium text-gray-800">
+                        {o.ad_soyad}
+                        {tamOdendi && <span className="ml-2 text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full font-normal">✓ ödendi</span>}
+                      </td>
+                      <td className="px-4 py-3 text-gray-600">{o.sinif}. Sınıf</td>
+                      <td className="px-4 py-3">
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                          o.ogrenci_tipi === 'kurs' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'
+                        }`}>
+                          {o.ogrenci_tipi === 'kurs' ? 'Kurs' : 'Deneme Kulübü'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-gray-600">{o.veliler?.ad_soyad || '-'}</td>
+                      <td className="px-4 py-3 text-gray-600">{o.veliler?.telefon || '-'}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex gap-2">
+                          <Link href={`/ogrenciler/${o.id}`}
+                            className="text-xs bg-gray-100 text-gray-600 px-3 py-1 rounded-lg hover:bg-blue-100 hover:text-blue-700">
+                            Detay
+                          </Link>
+                          {yetki && (
+                            <>
+                              <button onClick={() => duzenleAc(o)}
+                                className="text-xs bg-yellow-50 text-yellow-700 border border-yellow-200 px-3 py-1 rounded-lg hover:bg-yellow-100">
+                                Düzenle
+                              </button>
+                              <button onClick={() => sil(o.id, o.ad_soyad)}
+                                className="text-xs bg-red-50 text-red-600 border border-red-200 px-3 py-1 rounded-lg hover:bg-red-100">
+                                Sil
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>

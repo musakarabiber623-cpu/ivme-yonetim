@@ -22,6 +22,7 @@ export default function Home() {
     toplamGider: 0,
   })
   const [yukleniyor, setYukleniyor] = useState(false)
+  const [duzeltYukleniyor, setDuzeltYukleniyor] = useState(false)
 
   useEffect(() => {
     const loggedIn = girisYapildiMi()
@@ -91,6 +92,31 @@ export default function Home() {
       alert('Kullanıcı adı veya şifre hatalı!')
       setLoginSifre('')
     }
+  }
+
+  async function taksitDuzelt() {
+    if (!confirm('Tüm taksit tutarları tam sayıya yuvarlanacak. Devam edilsin mi?')) return
+    setDuzeltYukleniyor(true)
+    const { data: planlar } = await supabase.from('odeme_planlari').select('id, toplam_ucret')
+    let guncellenen = 0
+    for (const plan of planlar || []) {
+      const { data: taksitler } = await supabase
+        .from('taksitler').select('id, taksit_no')
+        .eq('odeme_plan_id', plan.id).order('taksit_no')
+      if (!taksitler || taksitler.length === 0) continue
+      const cnt = taksitler.length
+      const base = Math.floor(plan.toplam_ucret / cnt)
+      const son = Math.round(plan.toplam_ucret - base * (cnt - 1))
+      for (let i = 0; i < cnt; i++) {
+        await supabase.from('taksitler')
+          .update({ tutar: i === cnt - 1 ? son : base })
+          .eq('id', taksitler[i].id)
+      }
+      guncellenen++
+    }
+    setDuzeltYukleniyor(false)
+    alert(`${guncellenen} ödeme planı güncellendi. Taksit tutarları tam sayıya yuvarlandı.`)
+    getir()
   }
 
   function tamCikis() {
@@ -193,6 +219,16 @@ export default function Home() {
             <span className={`text-xs px-3 py-1.5 rounded-full font-medium ${isAdmin ? 'bg-green-100 text-green-700' : 'bg-blue-50 text-blue-600'}`}>
               {isAdmin ? '🔓 Yönetici' : '👁️ Ziyaretçi'}
             </span>
+            <button onClick={getir} disabled={yukleniyor}
+              className="text-xs text-gray-400 hover:text-blue-600 border border-gray-200 rounded-lg px-3 py-1.5 disabled:opacity-50">
+              {yukleniyor ? '...' : '↻ Yenile'}
+            </button>
+            {isAdmin && (
+              <button onClick={taksitDuzelt} disabled={duzeltYukleniyor}
+                className="text-xs text-orange-500 hover:text-orange-700 border border-orange-200 rounded-lg px-3 py-1.5 disabled:opacity-50">
+                {duzeltYukleniyor ? 'Düzeltiliyor...' : 'Taksit Düzelt'}
+              </button>
+            )}
             {!isAdmin && (
               <button onClick={() => setLoginAcik(true)}
                 className="text-xs text-gray-400 hover:text-blue-600 border border-gray-200 rounded-lg px-3 py-1.5">
