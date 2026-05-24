@@ -33,15 +33,18 @@ export default function Home() {
 
   async function getir() {
     setYukleniyor(true)
-    const buAy = new Date().toISOString().slice(0, 7)
-    const bugun = new Date().toISOString().split('T')[0]
+    const simdi = new Date()
+    const bugun = simdi.toISOString().split('T')[0]
+    const buAyBaslangic = `${simdi.getFullYear()}-${String(simdi.getMonth() + 1).padStart(2, '0')}-01`
+    const sonrakiAy = new Date(simdi.getFullYear(), simdi.getMonth() + 1, 1)
+    const buAySon = `${sonrakiAy.getFullYear()}-${String(sonrakiAy.getMonth() + 1).padStart(2, '0')}-01`
 
     const [
       ogrenci, tahsil, bekleyen, geciken,
       ggGelir, ggGider, bankaGelir, bankaGider, taksitGelir, personelGider
     ] = await Promise.all([
       supabase.from('ogrenciler').select('id', { count: 'exact' }).eq('aktif', true),
-      supabase.from('taksitler').select('tutar').eq('durum', 'odendi').like('odeme_tarihi', `${buAy}%`),
+      supabase.from('taksitler').select('tutar').eq('durum', 'odendi').gte('odeme_tarihi', buAyBaslangic).lt('odeme_tarihi', buAySon),
       supabase.from('taksitler').select('tutar').neq('durum', 'odendi').gte('vade_tarihi', bugun),
       supabase.from('taksitler').select('tutar').neq('durum', 'odendi').lt('vade_tarihi', bugun),
       supabase.from('gelir_gider').select('tutar').eq('tur', 'gelir').not('kategori', 'in', `(${KANTIN_KATEGORILERI.join(',')})`),
