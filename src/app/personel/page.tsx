@@ -12,6 +12,7 @@ type Personel = {
   aktif: boolean
   baslangic_tarihi: string
   notlar: string | null
+  ders_basi_ucret: number | null
 }
 
 type Odeme = {
@@ -48,19 +49,22 @@ export default function PersonelPage() {
   const [sekme, setSekme] = useState<'liste' | 'odeme_listesi' | 'odeme' | 'yeni'>('liste')
 
   const [pForm, setPForm] = useState({
-    ad_soyad: '', personel_tipi: 'meb_ogretmen', telefon: '', baslangic_tarihi: new Date().toISOString().split('T')[0], notlar: ''
+    ad_soyad: '', personel_tipi: 'meb_ogretmen', telefon: '',
+    baslangic_tarihi: new Date().toISOString().split('T')[0], notlar: '',
+    ders_basi_ucret: '',
   })
   const [oForm, setOForm] = useState({
     personel_id: '', donem: new Date().toISOString().slice(0, 7),
-    odeme_turu: 'maas', brut_tutar: '', sgk_isci: '', sgk_isveren: '',
-    net_tutar: '', ek_ders_saati: '', odeme_tarihi: new Date().toISOString().split('T')[0]
+    odeme_turu: 'maas', brut_tutar: '', ek_ders_sayisi: '',
+    odeme_tarihi: new Date().toISOString().split('T')[0],
   })
   const [kaydediliyor, setKaydediliyor] = useState(false)
   const [yetki, setYetki] = useState(false)
 
   const [duzenleId, setDuzenleId] = useState<number | null>(null)
   const [duzenleForm, setDuzenleForm] = useState({
-    ad_soyad: '', personel_tipi: 'meb_ogretmen', telefon: '', baslangic_tarihi: '', notlar: ''
+    ad_soyad: '', personel_tipi: 'meb_ogretmen', telefon: '',
+    baslangic_tarihi: '', notlar: '', ders_basi_ucret: '',
   })
   const [islem, setIslem] = useState(false)
 
@@ -81,29 +85,33 @@ export default function PersonelPage() {
     setKaydediliyor(true)
     const { error } = await supabase.from('personel').insert({
       ad_soyad: pForm.ad_soyad, personel_tipi: pForm.personel_tipi,
-      telefon: pForm.telefon || null, baslangic_tarihi: pForm.baslangic_tarihi, notlar: pForm.notlar || null
+      telefon: pForm.telefon || null, baslangic_tarihi: pForm.baslangic_tarihi,
+      notlar: pForm.notlar || null,
+      ders_basi_ucret: pForm.ders_basi_ucret ? parseFloat(pForm.ders_basi_ucret) : null,
     })
     if (error) { alert('Hata: ' + error.message); setKaydediliyor(false); return }
-    setPForm({ ad_soyad: '', personel_tipi: 'meb_ogretmen', telefon: '', baslangic_tarihi: new Date().toISOString().split('T')[0], notlar: '' })
+    setPForm({ ad_soyad: '', personel_tipi: 'meb_ogretmen', telefon: '', baslangic_tarihi: new Date().toISOString().split('T')[0], notlar: '', ders_basi_ucret: '' })
     getir()
     setSekme('liste')
     setKaydediliyor(false)
   }
 
   async function odemeKaydet() {
-    if (!oForm.personel_id || !oForm.brut_tutar || !oForm.net_tutar) { alert('Personel, brüt ve net tutar zorunludur.'); return }
+    if (!oForm.personel_id || !oForm.brut_tutar) { alert('Personel ve tutar zorunludur.'); return }
     setKaydediliyor(true)
+    const maas = parseFloat(oForm.brut_tutar)
+    const ekDersSayisi = parseInt(oForm.ek_ders_sayisi) || 0
+    const secilen = personeller.find(p => p.id === parseInt(oForm.personel_id))
+    const ekDersUcret = ekDersSayisi * (secilen?.ders_basi_ucret || 0)
+    const toplam = maas + ekDersUcret
     const { error } = await supabase.from('personel_odemeler').insert({
       personel_id: parseInt(oForm.personel_id), donem: oForm.donem, odeme_turu: oForm.odeme_turu,
-      brut_tutar: parseFloat(oForm.brut_tutar),
-      sgk_isci: oForm.sgk_isci ? parseFloat(oForm.sgk_isci) : null,
-      sgk_isveren: oForm.sgk_isveren ? parseFloat(oForm.sgk_isveren) : null,
-      net_tutar: parseFloat(oForm.net_tutar),
-      ek_ders_saati: oForm.ek_ders_saati ? parseInt(oForm.ek_ders_saati) : null,
+      brut_tutar: toplam, sgk_isci: null, sgk_isveren: null, net_tutar: toplam,
+      ek_ders_saati: ekDersSayisi || null,
       odeme_tarihi: oForm.odeme_tarihi || null,
     })
     if (error) { alert('Hata: ' + error.message); setKaydediliyor(false); return }
-    setOForm(f => ({ ...f, brut_tutar: '', sgk_isci: '', sgk_isveren: '', net_tutar: '', ek_ders_saati: '' }))
+    setOForm(f => ({ ...f, brut_tutar: '', ek_ders_sayisi: '' }))
     getir()
     setKaydediliyor(false)
   }
@@ -111,11 +119,10 @@ export default function PersonelPage() {
   function duzenleAc(p: Personel) {
     setDuzenleId(p.id)
     setDuzenleForm({
-      ad_soyad: p.ad_soyad,
-      personel_tipi: p.personel_tipi,
-      telefon: p.telefon || '',
-      baslangic_tarihi: p.baslangic_tarihi,
+      ad_soyad: p.ad_soyad, personel_tipi: p.personel_tipi,
+      telefon: p.telefon || '', baslangic_tarihi: p.baslangic_tarihi,
       notlar: p.notlar || '',
+      ders_basi_ucret: p.ders_basi_ucret != null ? String(p.ders_basi_ucret) : '',
     })
   }
 
@@ -123,11 +130,10 @@ export default function PersonelPage() {
     if (!duzenleForm.ad_soyad) return
     setIslem(true)
     const { error } = await supabase.from('personel').update({
-      ad_soyad: duzenleForm.ad_soyad,
-      personel_tipi: duzenleForm.personel_tipi,
-      telefon: duzenleForm.telefon || null,
-      baslangic_tarihi: duzenleForm.baslangic_tarihi,
+      ad_soyad: duzenleForm.ad_soyad, personel_tipi: duzenleForm.personel_tipi,
+      telefon: duzenleForm.telefon || null, baslangic_tarihi: duzenleForm.baslangic_tarihi,
       notlar: duzenleForm.notlar || null,
+      ders_basi_ucret: duzenleForm.ders_basi_ucret ? parseFloat(duzenleForm.ders_basi_ucret) : null,
     }).eq('id', duzenleId)
     if (error) { alert('Hata: ' + error.message); setIslem(false); return }
     setDuzenleId(null)
@@ -154,8 +160,13 @@ export default function PersonelPage() {
   const setO = (k: string, v: string) => setOForm(f => ({ ...f, [k]: v }))
   const setD = (k: string, v: string) => setDuzenleForm(f => ({ ...f, [k]: v }))
 
+  const secilenPersonel = personeller.find(p => p.id === parseInt(oForm.personel_id))
+  const ekDersSayisi = parseInt(oForm.ek_ders_sayisi) || 0
+  const ekDersUcret = ekDersSayisi * (secilenPersonel?.ders_basi_ucret || 0)
+  const toplamTutar = (parseFloat(oForm.brut_tutar) || 0) + ekDersUcret
+
   const buAyGider = odemeler.filter(o => o.donem === new Date().toISOString().slice(0, 7))
-    .reduce((s, o) => s + o.brut_tutar + (o.sgk_isveren || 0), 0)
+    .reduce((s, o) => s + o.brut_tutar, 0)
 
   return (
     <main className="min-h-screen bg-gray-50 p-8">
@@ -188,10 +199,18 @@ export default function PersonelPage() {
                       className="w-full border border-gray-200 rounded-lg px-3 py-2 mt-1 text-sm focus:outline-none focus:border-blue-400" />
                   </div>
                 </div>
-                <div>
-                  <label className="text-sm text-gray-500">Başlangıç Tarihi</label>
-                  <input type="date" value={duzenleForm.baslangic_tarihi} onChange={e => setD('baslangic_tarihi', e.target.value)}
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 mt-1 text-sm focus:outline-none focus:border-blue-400" />
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-sm text-gray-500">Başlangıç Tarihi</label>
+                    <input type="date" value={duzenleForm.baslangic_tarihi} onChange={e => setD('baslangic_tarihi', e.target.value)}
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 mt-1 text-sm focus:outline-none focus:border-blue-400" />
+                  </div>
+                  <div>
+                    <label className="text-sm text-gray-500">Ders Başı Ücret (₺)</label>
+                    <input type="number" value={duzenleForm.ders_basi_ucret} onChange={e => setD('ders_basi_ucret', e.target.value)}
+                      placeholder="0"
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 mt-1 text-sm focus:outline-none focus:border-blue-400" />
+                  </div>
                 </div>
                 <div>
                   <label className="text-sm text-gray-500">Notlar</label>
@@ -247,6 +266,7 @@ export default function PersonelPage() {
                     <tr>
                       <th className="text-left px-4 py-3 text-gray-500 font-medium">Ad Soyad</th>
                       <th className="text-left px-4 py-3 text-gray-500 font-medium">Tip</th>
+                      <th className="text-left px-4 py-3 text-gray-500 font-medium">Ders/Saat Ücreti</th>
                       <th className="text-left px-4 py-3 text-gray-500 font-medium">Telefon</th>
                       <th className="text-left px-4 py-3 text-gray-500 font-medium">Başlangıç</th>
                       <th className="text-left px-4 py-3 text-gray-500 font-medium"></th>
@@ -260,6 +280,9 @@ export default function PersonelPage() {
                           <span className={`px-2 py-1 rounded-full text-xs font-medium ${tipRenk[p.personel_tipi]}`}>
                             {tipYazi[p.personel_tipi]}
                           </span>
+                        </td>
+                        <td className="px-4 py-3 text-gray-600 text-sm">
+                          {p.ders_basi_ucret ? `₺${p.ders_basi_ucret.toLocaleString('tr-TR')}` : '—'}
                         </td>
                         <td className="px-4 py-3 text-gray-600">{p.telefon || '-'}</td>
                         <td className="px-4 py-3 text-gray-600">{new Date(p.baslangic_tarihi).toLocaleDateString('tr-TR')}</td>
@@ -293,7 +316,7 @@ export default function PersonelPage() {
                     <select value={oForm.personel_id} onChange={e => setO('personel_id', e.target.value)}
                       className="w-full border border-gray-200 rounded-lg px-3 py-2 mt-1 text-sm focus:outline-none focus:border-blue-400">
                       <option value="">Seçin...</option>
-                      {personeller.map(p => <option key={p.id} value={p.id}>{p.ad_soyad}</option>)}
+                      {personeller.filter(p => p.aktif).map(p => <option key={p.id} value={p.id}>{p.ad_soyad}</option>)}
                     </select>
                   </div>
                   <div>
@@ -310,31 +333,43 @@ export default function PersonelPage() {
                     </select>
                   </div>
                   <div>
-                    <label className="text-sm text-gray-500">Brüt Tutar (₺) *</label>
+                    <label className="text-sm text-gray-500">Ödeme Tarihi</label>
+                    <input type="date" value={oForm.odeme_tarihi} onChange={e => setO('odeme_tarihi', e.target.value)}
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 mt-1 text-sm focus:outline-none focus:border-blue-400" />
+                  </div>
+                  <div>
+                    <label className="text-sm text-gray-500">Toplam Tutar (₺) *</label>
                     <input type="number" value={oForm.brut_tutar} onChange={e => setO('brut_tutar', e.target.value)}
+                      placeholder="Maaş tutarı"
                       className="w-full border border-gray-200 rounded-lg px-3 py-2 mt-1 text-sm focus:outline-none focus:border-blue-400" />
                   </div>
                   <div>
-                    <label className="text-sm text-gray-500">SGK İşçi Payı (₺)</label>
-                    <input type="number" value={oForm.sgk_isci} onChange={e => setO('sgk_isci', e.target.value)}
+                    <label className="text-sm text-gray-500">Ek Ders Sayısı</label>
+                    <input type="number" value={oForm.ek_ders_sayisi} onChange={e => setO('ek_ders_sayisi', e.target.value)}
+                      placeholder="0"
                       className="w-full border border-gray-200 rounded-lg px-3 py-2 mt-1 text-sm focus:outline-none focus:border-blue-400" />
-                  </div>
-                  <div>
-                    <label className="text-sm text-gray-500">SGK İşveren Payı (₺)</label>
-                    <input type="number" value={oForm.sgk_isveren} onChange={e => setO('sgk_isveren', e.target.value)}
-                      className="w-full border border-gray-200 rounded-lg px-3 py-2 mt-1 text-sm focus:outline-none focus:border-blue-400" />
-                  </div>
-                  <div>
-                    <label className="text-sm text-gray-500">Net Tutar (₺) *</label>
-                    <input type="number" value={oForm.net_tutar} onChange={e => setO('net_tutar', e.target.value)}
-                      className="w-full border border-gray-200 rounded-lg px-3 py-2 mt-1 text-sm focus:outline-none focus:border-blue-400" />
-                  </div>
-                  <div>
-                    <label className="text-sm text-gray-500">Ek Ders Saati</label>
-                    <input type="number" value={oForm.ek_ders_saati} onChange={e => setO('ek_ders_saati', e.target.value)}
-                      className="w-full border border-gray-200 rounded-lg px-3 py-2 mt-1 text-sm focus:outline-none focus:border-blue-400" />
+                    {secilenPersonel?.ders_basi_ucret ? (
+                      <p className="text-xs text-gray-400 mt-1">
+                        {ekDersSayisi} ders × ₺{secilenPersonel.ders_basi_ucret.toLocaleString('tr-TR')} = ₺{ekDersUcret.toLocaleString('tr-TR')}
+                      </p>
+                    ) : oForm.personel_id ? (
+                      <p className="text-xs text-orange-400 mt-1">Ders başı ücret tanımlı değil</p>
+                    ) : null}
                   </div>
                 </div>
+
+                {(parseFloat(oForm.brut_tutar) > 0 || ekDersUcret > 0) && (
+                  <div className="mt-4 bg-blue-50 rounded-lg px-4 py-3 flex items-center justify-between">
+                    <div className="text-sm text-gray-600">
+                      <span>Maaş: ₺{(parseFloat(oForm.brut_tutar) || 0).toLocaleString('tr-TR')}</span>
+                      {ekDersUcret > 0 && <span className="ml-3">+ Ek Ders: ₺{ekDersUcret.toLocaleString('tr-TR')}</span>}
+                    </div>
+                    <div className="text-lg font-bold text-blue-700">
+                      Toplam: ₺{toplamTutar.toLocaleString('tr-TR')}
+                    </div>
+                  </div>
+                )}
+
                 <button onClick={odemeKaydet} disabled={kaydediliyor}
                   className="mt-4 w-full bg-blue-600 text-white py-2.5 rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50">
                   {kaydediliyor ? 'Kaydediliyor...' : 'Ödeme Kaydet'}
@@ -353,9 +388,8 @@ export default function PersonelPage() {
                         <th className="text-left px-4 py-3 text-gray-500 font-medium">Personel</th>
                         <th className="text-left px-4 py-3 text-gray-500 font-medium">Dönem</th>
                         <th className="text-left px-4 py-3 text-gray-500 font-medium">Tür</th>
-                        <th className="text-right px-4 py-3 text-gray-500 font-medium">Brüt</th>
-                        <th className="text-right px-4 py-3 text-gray-500 font-medium">SGK İşv.</th>
-                        <th className="text-right px-4 py-3 text-gray-500 font-medium">Net</th>
+                        <th className="text-right px-4 py-3 text-gray-500 font-medium">Tutar</th>
+                        <th className="text-right px-4 py-3 text-gray-500 font-medium">Ek Ders</th>
                         {yetki && <th className="px-4 py-3"></th>}
                       </tr>
                     </thead>
@@ -367,9 +401,10 @@ export default function PersonelPage() {
                             <td className="px-4 py-3 font-medium text-gray-800">{p?.ad_soyad || '—'}</td>
                             <td className="px-4 py-3 text-gray-600">{o.donem}</td>
                             <td className="px-4 py-3 text-gray-600 text-xs capitalize">{o.odeme_turu === 'maas' ? 'Maaş' : 'Ek Ders'}</td>
-                            <td className="px-4 py-3 text-right text-gray-800">₺{o.brut_tutar.toLocaleString('tr-TR')}</td>
-                            <td className="px-4 py-3 text-right text-gray-500">₺{(o.sgk_isveren || 0).toLocaleString('tr-TR')}</td>
-                            <td className="px-4 py-3 text-right font-semibold text-red-500">₺{o.net_tutar.toLocaleString('tr-TR')}</td>
+                            <td className="px-4 py-3 text-right font-semibold text-red-500">₺{o.brut_tutar.toLocaleString('tr-TR')}</td>
+                            <td className="px-4 py-3 text-right text-gray-500">
+                              {o.ek_ders_saati ? `${o.ek_ders_saati} ders` : '—'}
+                            </td>
                             {yetki && (
                               <td className="px-4 py-3">
                                 <button onClick={() => odemeSil(o.id)}
@@ -407,6 +442,12 @@ export default function PersonelPage() {
                     </select>
                   </div>
                   <div>
+                    <label className="text-sm text-gray-500">Ders Başı Ücret (₺)</label>
+                    <input type="number" value={pForm.ders_basi_ucret} onChange={e => setP('ders_basi_ucret', e.target.value)}
+                      placeholder="0"
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 mt-1 text-sm focus:outline-none focus:border-blue-400" />
+                  </div>
+                  <div>
                     <label className="text-sm text-gray-500">Telefon</label>
                     <input value={pForm.telefon} onChange={e => setP('telefon', e.target.value)}
                       className="w-full border border-gray-200 rounded-lg px-3 py-2 mt-1 text-sm focus:outline-none focus:border-blue-400" />
@@ -416,7 +457,7 @@ export default function PersonelPage() {
                     <input type="date" value={pForm.baslangic_tarihi} onChange={e => setP('baslangic_tarihi', e.target.value)}
                       className="w-full border border-gray-200 rounded-lg px-3 py-2 mt-1 text-sm focus:outline-none focus:border-blue-400" />
                   </div>
-                  <div>
+                  <div className="col-span-2">
                     <label className="text-sm text-gray-500">Notlar</label>
                     <input value={pForm.notlar} onChange={e => setP('notlar', e.target.value)}
                       className="w-full border border-gray-200 rounded-lg px-3 py-2 mt-1 text-sm focus:outline-none focus:border-blue-400" />

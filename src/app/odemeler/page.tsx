@@ -71,17 +71,12 @@ export default function OdemelerPage() {
     const { data: odenmemis, error: fetchErr } = await supabase
       .from('taksitler').select('id, tutar')
       .eq('odeme_plan_id', tahsilPlanId).neq('durum', 'odendi')
-      .order('taksit_no', { ascending: true })
+      .order('vade_tarihi', { ascending: true })
 
     if (fetchErr) { alert('Hata: ' + fetchErr.message); setTahsilYukleniyor(false); return }
 
-    // Tıklanan taksit ile başla, fazla ödeme sonraki taksitlere aktarılır
-    const liste = odenmemis || []
-    const baslangic = liste.findIndex(t => t.id === tahsilId)
-    const sira = baslangic >= 0 ? liste.slice(baslangic) : liste
-
     let kalan = tutar
-    for (const t of sira) {
+    for (const t of odenmemis || []) {
       if (kalan <= 0) break
       if (kalan >= t.tutar) {
         const { error } = await supabase.from('taksitler').update({
@@ -90,6 +85,12 @@ export default function OdemelerPage() {
           odendi_tutar: t.tutar,
         }).eq('id', t.id)
         if (error) { alert('Hata: ' + error.message); setTahsilYukleniyor(false); return }
+        if (tahsilForm.yontem === 'kredi_karti') {
+          await supabase.from('banka_hareketleri').insert({
+            tur: 'gelir', tutar: t.tutar, tarih: tahsilForm.tarih,
+            aciklama: 'TAKSİT: Kredi kartı taksit ödemesi',
+          })
+        }
         kalan -= t.tutar
       } else {
         const { error } = await supabase.from('taksitler').update({
@@ -99,6 +100,12 @@ export default function OdemelerPage() {
           odendi_tutar: Math.round(kalan),
         }).eq('id', t.id)
         if (error) { alert('Hata: ' + error.message); setTahsilYukleniyor(false); return }
+        if (tahsilForm.yontem === 'kredi_karti') {
+          await supabase.from('banka_hareketleri').insert({
+            tur: 'gelir', tutar: Math.round(kalan), tarih: tahsilForm.tarih,
+            aciklama: 'TAKSİT: Kredi kartı kısmi taksit ödemesi',
+          })
+        }
         kalan = 0
       }
     }
@@ -195,8 +202,7 @@ export default function OdemelerPage() {
                   <select value={tahsilForm.yontem} onChange={e => setTahsilForm(f => ({ ...f, yontem: e.target.value }))}
                     className="w-full border border-gray-200 rounded-lg px-3 py-2 mt-1 text-sm focus:outline-none focus:border-blue-400">
                     <option value="nakit">Nakit</option>
-                    <option value="kart">Kart</option>
-                    <option value="havale">Havale / EFT</option>
+                    <option value="kredi_karti">Kredi Kartı</option>
                   </select>
                 </div>
                 <div>
@@ -264,8 +270,7 @@ export default function OdemelerPage() {
                       <select value={editForm.odeme_yontemi} onChange={e => setEditForm(f => ({ ...f, odeme_yontemi: e.target.value }))}
                         className="w-full border border-gray-200 rounded-lg px-3 py-2 mt-1 text-sm focus:outline-none focus:border-blue-400">
                         <option value="nakit">Nakit</option>
-                        <option value="kart">Kart</option>
-                        <option value="havale">Havale / EFT</option>
+                        <option value="kredi_karti">Kredi Kartı</option>
                       </select>
                     </div>
                   </div>

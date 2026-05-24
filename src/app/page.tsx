@@ -56,7 +56,7 @@ export default function Home() {
       supabase.from('taksitler').select('tutar').neq('durum', 'odendi').lt('vade_tarihi', bugun),
       supabase.from('gelir_gider').select('tutar').eq('tur', 'gelir').not('kategori', 'in', `(${KANTIN_KATEGORILERI.join(',')})`),
       supabase.from('gelir_gider').select('tutar').eq('tur', 'gider').not('kategori', 'in', `(${KANTIN_KATEGORILERI.join(',')})`),
-      supabase.from('banka_hareketleri').select('tutar').eq('tur', 'gelir'),
+      supabase.from('banka_hareketleri').select('tutar').eq('tur', 'gelir').not('aciklama', 'like', 'TAKSİT:%'),
       supabase.from('banka_hareketleri').select('tutar').eq('tur', 'gider'),
       // Toplam gelir için: tam ödendi olanlar + kısmi ödeme odendi_tutar'ı
       supabase.from('taksitler').select('tutar, odendi_tutar, durum'),
