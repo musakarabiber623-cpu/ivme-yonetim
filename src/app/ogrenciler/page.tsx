@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
+import AdminPanel from '@/components/AdminPanel'
 
 type Ogrenci = {
   id: number
@@ -19,6 +20,7 @@ export default function OgrencilerPage() {
   const [arama, setArama] = useState('')
   const [filtre, setFiltre] = useState('hepsi')
   const [sinifFiltre, setSinifFiltre] = useState(0)
+  const [yetki, setYetki] = useState(false)
   const [duzenleId, setDuzenleId] = useState<number | null>(null)
   const [duzenleForm, setDuzenleForm] = useState({ ad_soyad: '', sinif: '5', ogrenci_tipi: 'kurs', kayit_tarihi: '' })
   const [islem, setIslem] = useState(false)
@@ -138,10 +140,15 @@ export default function OgrencilerPage() {
             <Link href="/" className="text-sm text-gray-400 hover:text-gray-600">← Ana Sayfa</Link>
             <h1 className="text-2xl font-bold text-gray-800 mt-1">Öğrenciler</h1>
           </div>
-          <Link href="/ogrenciler/yeni"
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700">
-            + Yeni Öğrenci
-          </Link>
+          <div className="flex items-center gap-3">
+            <AdminPanel onDegis={setYetki} />
+            {yetki && (
+              <Link href="/ogrenciler/yeni"
+                className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700">
+                + Yeni Öğrenci
+              </Link>
+            )}
+          </div>
         </div>
 
         <div className="flex gap-3 mb-3">
@@ -219,14 +226,18 @@ export default function OgrencilerPage() {
                           className="text-xs bg-gray-100 text-gray-600 px-3 py-1 rounded-lg hover:bg-blue-100 hover:text-blue-700">
                           Detay
                         </Link>
-                        <button onClick={() => duzenleAc(o)}
-                          className="text-xs bg-yellow-50 text-yellow-700 border border-yellow-200 px-3 py-1 rounded-lg hover:bg-yellow-100">
-                          Düzenle
-                        </button>
-                        <button onClick={() => sil(o.id, o.ad_soyad)}
-                          className="text-xs bg-red-50 text-red-600 border border-red-200 px-3 py-1 rounded-lg hover:bg-red-100">
-                          Sil
-                        </button>
+                        {yetki && (
+                          <>
+                            <button onClick={() => duzenleAc(o)}
+                              className="text-xs bg-yellow-50 text-yellow-700 border border-yellow-200 px-3 py-1 rounded-lg hover:bg-yellow-100">
+                              Düzenle
+                            </button>
+                            <button onClick={() => sil(o.id, o.ad_soyad)}
+                              className="text-xs bg-red-50 text-red-600 border border-red-200 px-3 py-1 rounded-lg hover:bg-red-100">
+                              Sil
+                            </button>
+                          </>
+                        )}
                       </div>
                     </td>
                   </tr>

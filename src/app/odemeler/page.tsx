@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
+import AdminPanel from '@/components/AdminPanel'
 
 type Taksit = {
   id: number
@@ -32,6 +33,7 @@ export default function OdemelerPage() {
     makbuz: '',
   })
   const [tahsilYukleniyor, setTahsilYukleniyor] = useState(false)
+  const [yetki, setYetki] = useState(false)
 
   useEffect(() => { getir() }, [])
 
@@ -155,9 +157,14 @@ export default function OdemelerPage() {
             <Link href="/" className="text-sm text-gray-400 hover:text-gray-600">← Ana Sayfa</Link>
             <h1 className="text-2xl font-bold text-gray-800 mt-1">Ödemeler & Taksitler</h1>
           </div>
-          <Link href="/odemeler/yeni-plan" className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700">
-            + Yeni Ödeme Planı
-          </Link>
+          <div className="flex items-center gap-3">
+            <AdminPanel onDegis={setYetki} />
+            {yetki && (
+              <Link href="/odemeler/yeni-plan" className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700">
+                + Yeni Ödeme Planı
+              </Link>
+            )}
+          </div>
         </div>
 
         <div className="grid grid-cols-3 gap-4 mb-6">
@@ -234,10 +241,14 @@ export default function OdemelerPage() {
                     </td>
                     <td className="px-4 py-3">
                       {t.durum !== 'odendi' ? (
-                        <button onClick={() => tahsilAc(t)}
-                          className="text-xs bg-green-50 text-green-700 border border-green-200 px-3 py-1 rounded-lg hover:bg-green-100">
-                          Tahsil Et
-                        </button>
+                        yetki ? (
+                          <button onClick={() => tahsilAc(t)}
+                            className="text-xs bg-green-50 text-green-700 border border-green-200 px-3 py-1 rounded-lg hover:bg-green-100">
+                            Tahsil Et
+                          </button>
+                        ) : (
+                          <span className="text-xs text-gray-300">—</span>
+                        )
                       ) : (
                         <span className="text-xs text-gray-400">
                           {t.odeme_tarihi ? new Date(t.odeme_tarihi).toLocaleDateString('tr-TR') : ''}

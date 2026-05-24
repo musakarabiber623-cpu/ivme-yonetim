@@ -3,10 +3,12 @@ import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import AdminPanel from '@/components/AdminPanel'
 
 export default function YeniOgrenciPage() {
   const router = useRouter()
   const [yukleniyor, setYukleniyor] = useState(false)
+  const [yetki, setYetki] = useState(false)
   const buYil = new Date().getFullYear()
   const [form, setForm] = useState({
     ad_soyad: '',
@@ -115,8 +117,18 @@ export default function YeniOgrenciPage() {
   return (
     <main className="min-h-screen bg-gray-50 p-8">
       <div className="max-w-2xl mx-auto">
-        <Link href="/ogrenciler" className="text-sm text-gray-400 hover:text-gray-600">← Öğrenciler</Link>
+        <div className="flex items-center justify-between mb-1">
+          <Link href="/ogrenciler" className="text-sm text-gray-400 hover:text-gray-600">← Öğrenciler</Link>
+          <AdminPanel onDegis={setYetki} />
+        </div>
         <h1 className="text-2xl font-bold text-gray-800 mt-1 mb-6">Yeni Öğrenci Kaydı</h1>
+
+        {!yetki ? (
+          <div className="bg-white rounded-xl border border-gray-100 p-10 text-center">
+            <p className="text-4xl mb-3">🔒</p>
+            <p className="text-gray-500 text-sm">Yeni öğrenci eklemek için yönetici girişi gereklidir.</p>
+          </div>
+        ) : (<>
 
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-4">
           <h2 className="font-semibold text-gray-700 mb-4">Öğrenci Bilgileri</h2>
@@ -255,6 +267,7 @@ export default function YeniOgrenciPage() {
           className="w-full bg-blue-600 text-white py-3 rounded-xl font-semibold hover:bg-blue-700 disabled:opacity-50">
           {yukleniyor ? 'Kaydediliyor...' : 'Öğrenciyi Kaydet'}
         </button>
+        </>)}
       </div>
     </main>
   )

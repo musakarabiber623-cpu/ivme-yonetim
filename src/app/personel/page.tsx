@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
+import AdminPanel from '@/components/AdminPanel'
 
 type Personel = {
   id: number
@@ -55,6 +56,7 @@ export default function PersonelPage() {
     net_tutar: '', ek_ders_saati: '', odeme_tarihi: new Date().toISOString().split('T')[0]
   })
   const [kaydediliyor, setKaydediliyor] = useState(false)
+  const [yetki, setYetki] = useState(false)
 
   const [duzenleId, setDuzenleId] = useState<number | null>(null)
   const [duzenleForm, setDuzenleForm] = useState({
@@ -207,6 +209,7 @@ export default function PersonelPage() {
           <Link href="/" className="text-sm text-gray-400 hover:text-gray-600">← Ana Sayfa</Link>
           <h1 className="text-2xl font-bold text-gray-800 mt-1">Personel</h1>
         </div>
+        <AdminPanel onDegis={setYetki} />
 
         <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 mb-6 inline-block">
           <p className="text-sm text-gray-500">Bu Ay Personel Gideri</p>
@@ -214,7 +217,7 @@ export default function PersonelPage() {
         </div>
 
         <div className="flex gap-2 mb-6">
-          {(['liste', 'odeme', 'yeni'] as const).map(s => (
+          {(yetki ? ['liste', 'odeme', 'yeni'] : ['liste'] as const).map(s => (
             <button key={s} onClick={() => setSekme(s)}
               className={`px-4 py-1.5 rounded-full text-sm font-medium border transition-all ${
                 sekme === s ? 'bg-gray-800 text-white border-gray-800' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'
@@ -250,16 +253,18 @@ export default function PersonelPage() {
                         <td className="px-4 py-3 text-gray-600">{p.telefon || '-'}</td>
                         <td className="px-4 py-3 text-gray-600">{new Date(p.baslangic_tarihi).toLocaleDateString('tr-TR')}</td>
                         <td className="px-4 py-3">
-                          <div className="flex gap-2">
-                            <button onClick={() => duzenleAc(p)}
-                              className="text-xs bg-yellow-50 text-yellow-700 border border-yellow-200 px-3 py-1 rounded-lg hover:bg-yellow-100">
-                              Düzenle
-                            </button>
-                            <button onClick={() => sil(p.id, p.ad_soyad)}
-                              className="text-xs bg-red-50 text-red-600 border border-red-200 px-3 py-1 rounded-lg hover:bg-red-100">
-                              Sil
-                            </button>
-                          </div>
+                          {yetki && (
+                            <div className="flex gap-2">
+                              <button onClick={() => duzenleAc(p)}
+                                className="text-xs bg-yellow-50 text-yellow-700 border border-yellow-200 px-3 py-1 rounded-lg hover:bg-yellow-100">
+                                Düzenle
+                              </button>
+                              <button onClick={() => sil(p.id, p.ad_soyad)}
+                                className="text-xs bg-red-50 text-red-600 border border-red-200 px-3 py-1 rounded-lg hover:bg-red-100">
+                                Sil
+                              </button>
+                            </div>
+                          )}
                         </td>
                       </tr>
                     ))}
