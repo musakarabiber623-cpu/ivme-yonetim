@@ -52,7 +52,7 @@ export default function Home() {
       supabase.from('banka_hareketleri').select('tutar').eq('tur', 'gelir'),
       supabase.from('banka_hareketleri').select('tutar').eq('tur', 'gider'),
       supabase.from('taksitler').select('tutar').eq('durum', 'odendi'),
-      supabase.from('personel_odemeler').select('brut_tutar, sgk_isveren'),
+      supabase.from('personel_odemeler').select('brut_tutar, sgk_isveren, personel!inner(aktif)').eq('personel.aktif', true),
     ])
 
     const toplamGelir =

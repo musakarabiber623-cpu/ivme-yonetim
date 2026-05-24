@@ -45,7 +45,7 @@ export default function PersonelPage() {
   const [personeller, setPersoneller] = useState<Personel[]>([])
   const [odemeler, setOdemeler] = useState<Odeme[]>([])
   const [yukleniyor, setYukleniyor] = useState(true)
-  const [sekme, setSekme] = useState<'liste' | 'odeme' | 'yeni'>('liste')
+  const [sekme, setSekme] = useState<'liste' | 'odeme_listesi' | 'odeme' | 'yeni'>('liste')
 
   const [pForm, setPForm] = useState({
     ad_soyad: '', personel_tipi: 'meb_ogretmen', telefon: '', baslangic_tarihi: new Date().toISOString().split('T')[0], notlar: ''
@@ -136,8 +136,16 @@ export default function PersonelPage() {
   }
 
   async function sil(id: number, ad: string) {
-    if (!confirm(`${ad} adlı personeli silmek istediğinize emin misiniz?`)) return
+    if (!confirm(`${ad} adlı personeli silmek istediğinize emin misiniz?\nPersonele ait tüm ödeme kayıtları da silinecektir.`)) return
+    await supabase.from('personel_odemeler').delete().eq('personel_id', id)
     const { error } = await supabase.from('personel').update({ aktif: false }).eq('id', id)
+    if (error) { alert('Hata: ' + error.message); return }
+    getir()
+  }
+
+  async function odemeSil(id: number) {
+    if (!confirm('Bu ödeme kaydını silmek istediğinize emin misiniz?')) return
+    const { error } = await supabase.from('personel_odemeler').delete().eq('id', id)
     if (error) { alert('Hata: ' + error.message); return }
     getir()
   }
@@ -217,12 +225,15 @@ export default function PersonelPage() {
         </div>
 
         <div className="flex gap-2 mb-6">
-          {(yetki ? ['liste', 'odeme', 'yeni'] as const : ['liste'] as const).map(s => (
+          {(yetki
+            ? ['liste', 'odeme_listesi', 'odeme', 'yeni'] as const
+            : ['liste', 'odeme_listesi'] as const
+          ).map(s => (
             <button key={s} onClick={() => setSekme(s)}
               className={`px-4 py-1.5 rounded-full text-sm font-medium border transition-all ${
                 sekme === s ? 'bg-gray-800 text-white border-gray-800' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'
               }`}>
-              {s === 'liste' ? 'Personel Listesi' : s === 'odeme' ? 'Ödeme Ekle' : '+ Yeni Personel'}
+              {s === 'liste' ? 'Personel Listesi' : s === 'odeme_listesi' ? `Ödeme Listesi (${odemeler.length})` : s === 'odeme' ? 'Ödeme Ekle' : '+ Yeni Personel'}
             </button>
           ))}
         </div>
@@ -328,6 +339,51 @@ export default function PersonelPage() {
                   className="mt-4 w-full bg-blue-600 text-white py-2.5 rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50">
                   {kaydediliyor ? 'Kaydediliyor...' : 'Ödeme Kaydet'}
                 </button>
+              </div>
+            )}
+
+            {sekme === 'odeme_listesi' && (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                {odemeler.length === 0 ? (
+                  <p className="text-gray-400 text-center py-12">Ödeme kaydı yok.</p>
+                ) : (
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50 border-b border-gray-100">
+                      <tr>
+                        <th className="text-left px-4 py-3 text-gray-500 font-medium">Personel</th>
+                        <th className="text-left px-4 py-3 text-gray-500 font-medium">Dönem</th>
+                        <th className="text-left px-4 py-3 text-gray-500 font-medium">Tür</th>
+                        <th className="text-right px-4 py-3 text-gray-500 font-medium">Brüt</th>
+                        <th className="text-right px-4 py-3 text-gray-500 font-medium">SGK İşv.</th>
+                        <th className="text-right px-4 py-3 text-gray-500 font-medium">Net</th>
+                        {yetki && <th className="px-4 py-3"></th>}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {odemeler.map((o, i) => {
+                        const p = personeller.find(x => x.id === o.personel_id)
+                        return (
+                          <tr key={o.id} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                            <td className="px-4 py-3 font-medium text-gray-800">{p?.ad_soyad || '—'}</td>
+                            <td className="px-4 py-3 text-gray-600">{o.donem}</td>
+                            <td className="px-4 py-3 text-gray-600 text-xs capitalize">{o.odeme_turu === 'maas' ? 'Maaş' : 'Ek Ders'}</td>
+                            <td className="px-4 py-3 text-right text-gray-800">₺{o.brut_tutar.toLocaleString('tr-TR')}</td>
+                            <td className="px-4 py-3 text-right text-gray-500">₺{(o.sgk_isveren || 0).toLocaleString('tr-TR')}</td>
+                            <td className="px-4 py-3 text-right font-semibold text-red-500">₺{o.net_tutar.toLocaleString('tr-TR')}</td>
+                            {yetki && (
+                              <td className="px-4 py-3">
+                                <button onClick={() => odemeSil(o.id)}
+                                  className="text-xs bg-red-50 text-red-600 border border-red-200 px-3 py-1 rounded-lg hover:bg-red-100">
+                                  Sil
+                                </button>
+                              </td>
+                            )}
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                )}
               </div>
             )}
 
