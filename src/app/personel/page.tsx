@@ -32,6 +32,7 @@ const tipYazi: Record<string, string> = {
   meb_ogretmen: 'MEB Öğretmeni',
   aylik_ogretmen: 'Aylık Öğretmen',
   mudur: 'Müdür',
+  kurucu_mudur: 'Kurucu Müdür',
   yardimci_personel: 'Yardımcı Personel',
   muhasebe: 'Muhasebe',
 }
@@ -40,6 +41,7 @@ const tipRenk: Record<string, string> = {
   meb_ogretmen: 'bg-blue-100 text-blue-700',
   aylik_ogretmen: 'bg-purple-100 text-purple-700',
   mudur: 'bg-amber-100 text-amber-700',
+  kurucu_mudur: 'bg-orange-100 text-orange-700',
   yardimci_personel: 'bg-gray-100 text-gray-700',
   muhasebe: 'bg-teal-100 text-teal-700',
 }
@@ -201,6 +203,7 @@ export default function PersonelPage() {
                       <option value="meb_ogretmen">MEB Öğretmeni</option>
                       <option value="aylik_ogretmen">Aylık Öğretmen</option>
                       <option value="mudur">Müdür</option>
+                      <option value="kurucu_mudur">Kurucu Müdür</option>
                       <option value="yardimci_personel">Yardımcı Personel</option>
                       <option value="muhasebe">Muhasebe</option>
                     </select>
@@ -467,6 +470,7 @@ export default function PersonelPage() {
                       <option value="meb_ogretmen">MEB Öğretmeni</option>
                       <option value="aylik_ogretmen">Aylık Öğretmen</option>
                       <option value="mudur">Müdür</option>
+                      <option value="kurucu_mudur">Kurucu Müdür</option>
                       <option value="yardimci_personel">Yardımcı Personel</option>
                       <option value="muhasebe">Muhasebe</option>
                     </select>
