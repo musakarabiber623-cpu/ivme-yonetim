@@ -11,34 +11,18 @@ type Kayit = {
   tutar: number
   aciklama: string | null
   odeme_yontemi: string | null
-  belge_no: string | null
 }
 
-const kategoriler = {
-  diger_gelir: 'Diğer Gelir',
-  yayin_deneme: 'Yayın — Deneme',
-  yayin_kirtasiye: 'Yayın — Kırtasiye',
-  yayin_egitim_materyali: 'Yayın — Materyal',
-  kira: 'Kira',
-  elektrik_su_dogalgaz: 'Elektrik / Su / Gaz',
-  bakim_onarim: 'Bakım & Onarım',
-  diger_gider: 'Diğer Gider',
-}
-
-const gelirKategorileri = ['diger_gelir']
-const giderKategorileri = ['yayin_deneme', 'yayin_kirtasiye', 'yayin_egitim_materyali', 'kira', 'elektrik_su_dogalgaz', 'bakim_onarim', 'diger_gider']
-
-export default function GelirGiderPage() {
+export default function KantinPage() {
   const [kayitlar, setKayitlar] = useState<Kayit[]>([])
   const [yukleniyor, setYukleniyor] = useState(true)
   const [form, setForm] = useState({
     tarih: new Date().toISOString().split('T')[0],
     tur: 'gelir',
-    kategori: 'diger_gelir',
+    kategori: 'kantin_geliri',
     tutar: '',
     aciklama: '',
     odeme_yontemi: 'nakit',
-    belge_no: '',
   })
   const [kaydediliyor, setKaydediliyor] = useState(false)
 
@@ -48,14 +32,14 @@ export default function GelirGiderPage() {
     const { data } = await supabase
       .from('gelir_gider')
       .select('*')
-      .not('kategori', 'in', '(kantin_geliri,kantin_alis)')
+      .in('kategori', ['kantin_geliri', 'kantin_alis'])
       .order('tarih', { ascending: false })
     setKayitlar(data || [])
     setYukleniyor(false)
   }
 
   async function kaydet() {
-    if (!form.tutar || !form.kategori) { alert('Tutar ve kategori zorunludur.'); return }
+    if (!form.tutar) { alert('Tutar zorunludur.'); return }
     setKaydediliyor(true)
     const { error } = await supabase.from('gelir_gider').insert({
       tarih: form.tarih,
@@ -64,10 +48,9 @@ export default function GelirGiderPage() {
       tutar: parseFloat(form.tutar),
       aciklama: form.aciklama || null,
       odeme_yontemi: form.odeme_yontemi,
-      belge_no: form.belge_no || null,
     })
     if (error) { alert('Hata: ' + error.message); setKaydediliyor(false); return }
-    setForm(f => ({ ...f, tutar: '', aciklama: '', belge_no: '' }))
+    setForm(f => ({ ...f, tutar: '', aciklama: '' }))
     getir()
     setKaydediliyor(false)
   }
@@ -76,15 +59,20 @@ export default function GelirGiderPage() {
     setForm(f => {
       const yeni = { ...f, [k]: v }
       if (k === 'tur') {
-        yeni.kategori = v === 'gelir' ? 'diger_gelir' : 'yayin_deneme'
+        yeni.kategori = v === 'gelir' ? 'kantin_geliri' : 'kantin_alis'
       }
       return yeni
     })
   }
 
-  const toplamGelir = kayitlar.filter(k => k.tur === 'gelir').reduce((s, k) => s + k.tutar, 0)
-  const toplamGider = kayitlar.filter(k => k.tur === 'gider').reduce((s, k) => s + k.tutar, 0)
+  const toplamGelir = kayitlar.filter(k => k.kategori === 'kantin_geliri').reduce((s, k) => s + k.tutar, 0)
+  const toplamGider = kayitlar.filter(k => k.kategori === 'kantin_alis').reduce((s, k) => s + k.tutar, 0)
   const net = toplamGelir - toplamGider
+
+  const kategoriYazi: Record<string, string> = {
+    kantin_geliri: 'Kantin Geliri',
+    kantin_alis: 'Kantin Alışı',
+  }
 
   return (
     <main className="min-h-screen bg-gray-50 p-8">
@@ -92,16 +80,16 @@ export default function GelirGiderPage() {
 
         <div className="mb-6">
           <Link href="/" className="text-sm text-gray-400 hover:text-gray-600">← Ana Sayfa</Link>
-          <h1 className="text-2xl font-bold text-gray-800 mt-1">Gelir / Gider</h1>
+          <h1 className="text-2xl font-bold text-gray-800 mt-1">Kantin</h1>
         </div>
 
         <div className="grid grid-cols-3 gap-4 mb-6">
           <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-            <p className="text-sm text-gray-500">Toplam Gelir</p>
+            <p className="text-sm text-gray-500">Kantin Geliri</p>
             <p className="text-2xl font-bold text-green-600 mt-1">₺{toplamGelir.toLocaleString('tr-TR')}</p>
           </div>
           <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-            <p className="text-sm text-gray-500">Toplam Gider</p>
+            <p className="text-sm text-gray-500">Kantin Alışı</p>
             <p className="text-2xl font-bold text-red-500 mt-1">₺{toplamGider.toLocaleString('tr-TR')}</p>
           </div>
           <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
@@ -119,17 +107,8 @@ export default function GelirGiderPage() {
               <label className="text-sm text-gray-500">Tür</label>
               <select value={form.tur} onChange={e => set('tur', e.target.value)}
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 mt-1 text-sm focus:outline-none focus:border-blue-400">
-                <option value="gelir">Gelir</option>
-                <option value="gider">Gider</option>
-              </select>
-            </div>
-            <div>
-              <label className="text-sm text-gray-500">Kategori</label>
-              <select value={form.kategori} onChange={e => set('kategori', e.target.value)}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 mt-1 text-sm focus:outline-none focus:border-blue-400">
-                {(form.tur === 'gelir' ? gelirKategorileri : giderKategorileri).map(k => (
-                  <option key={k} value={k}>{kategoriler[k as keyof typeof kategoriler]}</option>
-                ))}
+                <option value="gelir">Kantin Geliri</option>
+                <option value="gider">Kantin Alışı</option>
               </select>
             </div>
             <div>
@@ -144,12 +123,6 @@ export default function GelirGiderPage() {
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 mt-1 text-sm focus:outline-none focus:border-blue-400" />
             </div>
             <div>
-              <label className="text-sm text-gray-500">Açıklama</label>
-              <input value={form.aciklama} onChange={e => set('aciklama', e.target.value)}
-                placeholder="Örn: Elektrik faturası"
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 mt-1 text-sm focus:outline-none focus:border-blue-400" />
-            </div>
-            <div>
               <label className="text-sm text-gray-500">Ödeme Yöntemi</label>
               <select value={form.odeme_yontemi} onChange={e => set('odeme_yontemi', e.target.value)}
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 mt-1 text-sm focus:outline-none focus:border-blue-400">
@@ -157,6 +130,12 @@ export default function GelirGiderPage() {
                 <option value="kart">Kart</option>
                 <option value="havale">Havale</option>
               </select>
+            </div>
+            <div className="col-span-2">
+              <label className="text-sm text-gray-500">Açıklama</label>
+              <input value={form.aciklama} onChange={e => set('aciklama', e.target.value)}
+                placeholder="Örn: Salı günü kantin cirosu"
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 mt-1 text-sm focus:outline-none focus:border-blue-400" />
             </div>
           </div>
           <button onClick={kaydet} disabled={kaydediliyor}
@@ -173,7 +152,6 @@ export default function GelirGiderPage() {
               <thead className="bg-gray-50 border-b border-gray-100">
                 <tr>
                   <th className="text-left px-4 py-3 text-gray-500 font-medium">Tarih</th>
-                  <th className="text-left px-4 py-3 text-gray-500 font-medium">Tür</th>
                   <th className="text-left px-4 py-3 text-gray-500 font-medium">Kategori</th>
                   <th className="text-left px-4 py-3 text-gray-500 font-medium">Açıklama</th>
                   <th className="text-right px-4 py-3 text-gray-500 font-medium">Tutar</th>
@@ -184,14 +162,13 @@ export default function GelirGiderPage() {
                   <tr key={k.id} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                     <td className="px-4 py-3 text-gray-600">{new Date(k.tarih).toLocaleDateString('tr-TR')}</td>
                     <td className="px-4 py-3">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${k.tur === 'gelir' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                        {k.tur === 'gelir' ? 'Gelir' : 'Gider'}
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${k.kategori === 'kantin_geliri' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                        {kategoriYazi[k.kategori]}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-gray-600">{kategoriler[k.kategori as keyof typeof kategoriler] || k.kategori}</td>
                     <td className="px-4 py-3 text-gray-500">{k.aciklama || '-'}</td>
-                    <td className={`px-4 py-3 text-right font-semibold ${k.tur === 'gelir' ? 'text-green-600' : 'text-red-500'}`}>
-                      {k.tur === 'gelir' ? '+' : '-'}₺{k.tutar.toLocaleString('tr-TR')}
+                    <td className={`px-4 py-3 text-right font-semibold ${k.kategori === 'kantin_geliri' ? 'text-green-600' : 'text-red-500'}`}>
+                      {k.kategori === 'kantin_geliri' ? '+' : '-'}₺{k.tutar.toLocaleString('tr-TR')}
                     </td>
                   </tr>
                 ))}

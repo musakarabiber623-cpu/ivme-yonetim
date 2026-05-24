@@ -43,7 +43,8 @@ export default function Home() {
     { href: '/odemeler', icon: '💰', baslik: 'Ödemeler', aciklama: 'Taksit takip, tahsilat', renk: 'hover:border-green-300' },
     { href: '/sinavlar', icon: '📝', baslik: 'Sınavlar', aciklama: 'Deneme sonuçları', renk: 'hover:border-purple-300' },
     { href: '/personel', icon: '👩‍🏫', baslik: 'Personel', aciklama: 'Maaş, SGK, ek ders', renk: 'hover:border-yellow-300' },
-    { href: '/gelir-gider', icon: '📊', baslik: 'Gelir / Gider', aciklama: 'Kantin, giderler', renk: 'hover:border-red-300' },
+    { href: '/kantin', icon: '🏪', baslik: 'Kantin', aciklama: 'Kantin gelir ve giderleri', renk: 'hover:border-orange-300' },
+    { href: '/gelir-gider', icon: '📊', baslik: 'Gelir / Gider', aciklama: 'Kurum giderleri, diğer gelirler', renk: 'hover:border-red-300' },
     { href: '/raporlar', icon: '📈', baslik: 'Raporlar', aciklama: 'Nakit akış, özet', renk: 'hover:border-gray-300' },
     { href: '/sms', icon: '💬', baslik: 'SMS', aciklama: 'Veli bilgilendirme, taksit, sınav', renk: 'hover:border-teal-300' },
   ]

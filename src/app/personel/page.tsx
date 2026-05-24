@@ -56,6 +56,12 @@ export default function PersonelPage() {
   })
   const [kaydediliyor, setKaydediliyor] = useState(false)
 
+  const [duzenleId, setDuzenleId] = useState<number | null>(null)
+  const [duzenleForm, setDuzenleForm] = useState({
+    ad_soyad: '', personel_tipi: 'meb_ogretmen', telefon: '', baslangic_tarihi: '', notlar: ''
+  })
+  const [islem, setIslem] = useState(false)
+
   useEffect(() => { getir() }, [])
 
   async function getir() {
@@ -100,8 +106,43 @@ export default function PersonelPage() {
     setKaydediliyor(false)
   }
 
+  function duzenleAc(p: Personel) {
+    setDuzenleId(p.id)
+    setDuzenleForm({
+      ad_soyad: p.ad_soyad,
+      personel_tipi: p.personel_tipi,
+      telefon: p.telefon || '',
+      baslangic_tarihi: p.baslangic_tarihi,
+      notlar: p.notlar || '',
+    })
+  }
+
+  async function guncelle() {
+    if (!duzenleForm.ad_soyad) return
+    setIslem(true)
+    const { error } = await supabase.from('personel').update({
+      ad_soyad: duzenleForm.ad_soyad,
+      personel_tipi: duzenleForm.personel_tipi,
+      telefon: duzenleForm.telefon || null,
+      baslangic_tarihi: duzenleForm.baslangic_tarihi,
+      notlar: duzenleForm.notlar || null,
+    }).eq('id', duzenleId)
+    if (error) { alert('Hata: ' + error.message); setIslem(false); return }
+    setDuzenleId(null)
+    getir()
+    setIslem(false)
+  }
+
+  async function sil(id: number, ad: string) {
+    if (!confirm(`${ad} adlı personeli silmek istediğinize emin misiniz?`)) return
+    const { error } = await supabase.from('personel').update({ aktif: false }).eq('id', id)
+    if (error) { alert('Hata: ' + error.message); return }
+    getir()
+  }
+
   const setP = (k: string, v: string) => setPForm(f => ({ ...f, [k]: v }))
   const setO = (k: string, v: string) => setOForm(f => ({ ...f, [k]: v }))
+  const setD = (k: string, v: string) => setDuzenleForm(f => ({ ...f, [k]: v }))
 
   const buAyGider = odemeler.filter(o => o.donem === new Date().toISOString().slice(0, 7))
     .reduce((s, o) => s + o.brut_tutar + (o.sgk_isveren || 0), 0)
@@ -109,6 +150,59 @@ export default function PersonelPage() {
   return (
     <main className="min-h-screen bg-gray-50 p-8">
       <div className="max-w-5xl mx-auto">
+
+        {duzenleId !== null && (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+            <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-md">
+              <h2 className="font-semibold text-gray-800 mb-4">Personel Düzenle</h2>
+              <div className="space-y-3">
+                <div>
+                  <label className="text-sm text-gray-500">Ad Soyad</label>
+                  <input value={duzenleForm.ad_soyad} onChange={e => setD('ad_soyad', e.target.value)}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 mt-1 text-sm focus:outline-none focus:border-blue-400" />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-sm text-gray-500">Personel Tipi</label>
+                    <select value={duzenleForm.personel_tipi} onChange={e => setD('personel_tipi', e.target.value)}
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 mt-1 text-sm focus:outline-none focus:border-blue-400">
+                      <option value="meb_ogretmen">MEB Öğretmeni</option>
+                      <option value="aylik_ogretmen">Aylık Öğretmen</option>
+                      <option value="mudur">Müdür</option>
+                      <option value="yardimci_personel">Yardımcı Personel</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-sm text-gray-500">Telefon</label>
+                    <input value={duzenleForm.telefon} onChange={e => setD('telefon', e.target.value)}
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 mt-1 text-sm focus:outline-none focus:border-blue-400" />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-sm text-gray-500">Başlangıç Tarihi</label>
+                  <input type="date" value={duzenleForm.baslangic_tarihi} onChange={e => setD('baslangic_tarihi', e.target.value)}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 mt-1 text-sm focus:outline-none focus:border-blue-400" />
+                </div>
+                <div>
+                  <label className="text-sm text-gray-500">Notlar</label>
+                  <input value={duzenleForm.notlar} onChange={e => setD('notlar', e.target.value)}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 mt-1 text-sm focus:outline-none focus:border-blue-400" />
+                </div>
+              </div>
+              <div className="flex gap-2 mt-4">
+                <button onClick={guncelle} disabled={islem}
+                  className="flex-1 bg-blue-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
+                  {islem ? 'Kaydediliyor...' : 'Güncelle'}
+                </button>
+                <button onClick={() => setDuzenleId(null)}
+                  className="flex-1 bg-gray-100 text-gray-700 py-2 rounded-lg text-sm font-medium hover:bg-gray-200">
+                  İptal
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="mb-6">
           <Link href="/" className="text-sm text-gray-400 hover:text-gray-600">← Ana Sayfa</Link>
           <h1 className="text-2xl font-bold text-gray-800 mt-1">Personel</h1>
@@ -141,6 +235,7 @@ export default function PersonelPage() {
                       <th className="text-left px-4 py-3 text-gray-500 font-medium">Tip</th>
                       <th className="text-left px-4 py-3 text-gray-500 font-medium">Telefon</th>
                       <th className="text-left px-4 py-3 text-gray-500 font-medium">Başlangıç</th>
+                      <th className="text-left px-4 py-3 text-gray-500 font-medium"></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -154,6 +249,18 @@ export default function PersonelPage() {
                         </td>
                         <td className="px-4 py-3 text-gray-600">{p.telefon || '-'}</td>
                         <td className="px-4 py-3 text-gray-600">{new Date(p.baslangic_tarihi).toLocaleDateString('tr-TR')}</td>
+                        <td className="px-4 py-3">
+                          <div className="flex gap-2">
+                            <button onClick={() => duzenleAc(p)}
+                              className="text-xs bg-yellow-50 text-yellow-700 border border-yellow-200 px-3 py-1 rounded-lg hover:bg-yellow-100">
+                              Düzenle
+                            </button>
+                            <button onClick={() => sil(p.id, p.ad_soyad)}
+                              className="text-xs bg-red-50 text-red-600 border border-red-200 px-3 py-1 rounded-lg hover:bg-red-100">
+                              Sil
+                            </button>
+                          </div>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -184,9 +291,6 @@ export default function PersonelPage() {
                       className="w-full border border-gray-200 rounded-lg px-3 py-2 mt-1 text-sm focus:outline-none focus:border-blue-400">
                       <option value="maas">Maaş</option>
                       <option value="ek_ders">Ek Ders</option>
-                      <option value="sgk_primi">SGK Primi</option>
-                      <option value="ikramiye">İkramiye</option>
-                      <option value="diger">Diğer</option>
                     </select>
                   </div>
                   <div>

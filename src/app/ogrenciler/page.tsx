@@ -18,19 +18,55 @@ export default function OgrencilerPage() {
   const [yukleniyor, setYukleniyor] = useState(true)
   const [arama, setArama] = useState('')
   const [filtre, setFiltre] = useState('hepsi')
+  const [duzenleId, setDuzenleId] = useState<number | null>(null)
+  const [duzenleForm, setDuzenleForm] = useState({ ad_soyad: '', sinif: '5', ogrenci_tipi: 'kurs', kayit_tarihi: '' })
+  const [islem, setIslem] = useState(false)
 
-  useEffect(() => {
-    async function getir() {
-      const { data } = await supabase
-        .from('ogrenciler')
-        .select('*, veliler(ad_soyad, telefon)')
-        .eq('aktif', true)
-        .order('ad_soyad')
-      setOgrenciler(data || [])
-      setYukleniyor(false)
-    }
+  useEffect(() => { getir() }, [])
+
+  async function getir() {
+    const { data } = await supabase
+      .from('ogrenciler')
+      .select('*, veliler(ad_soyad, telefon)')
+      .eq('aktif', true)
+      .order('ad_soyad')
+    setOgrenciler(data || [])
+    setYukleniyor(false)
+  }
+
+  function duzenleAc(o: Ogrenci) {
+    setDuzenleId(o.id)
+    setDuzenleForm({
+      ad_soyad: o.ad_soyad,
+      sinif: String(o.sinif),
+      ogrenci_tipi: o.ogrenci_tipi,
+      kayit_tarihi: o.kayit_tarihi,
+    })
+  }
+
+  async function guncelle() {
+    if (!duzenleForm.ad_soyad) return
+    setIslem(true)
+    const { error } = await supabase.from('ogrenciler').update({
+      ad_soyad: duzenleForm.ad_soyad,
+      sinif: parseInt(duzenleForm.sinif),
+      ogrenci_tipi: duzenleForm.ogrenci_tipi,
+      kayit_tarihi: duzenleForm.kayit_tarihi,
+    }).eq('id', duzenleId)
+    if (error) { alert('Hata: ' + error.message); setIslem(false); return }
+    setDuzenleId(null)
     getir()
-  }, [])
+    setIslem(false)
+  }
+
+  async function sil(id: number, ad: string) {
+    if (!confirm(`${ad} adlı öğrenciyi silmek istediğinize emin misiniz?`)) return
+    const { error } = await supabase.from('ogrenciler').update({ aktif: false }).eq('id', id)
+    if (error) { alert('Hata: ' + error.message); return }
+    getir()
+  }
+
+  const setD = (k: string, v: string) => setDuzenleForm(f => ({ ...f, [k]: v }))
 
   const filtrelendi = ogrenciler.filter(o => {
     const aramaUygun = o.ad_soyad.toLowerCase().includes(arama.toLowerCase())
@@ -41,6 +77,53 @@ export default function OgrencilerPage() {
   return (
     <main className="min-h-screen bg-gray-50 p-8">
       <div className="max-w-5xl mx-auto">
+
+        {duzenleId !== null && (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+            <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-md">
+              <h2 className="font-semibold text-gray-800 mb-4">Öğrenci Düzenle</h2>
+              <div className="space-y-3">
+                <div>
+                  <label className="text-sm text-gray-500">Ad Soyad</label>
+                  <input value={duzenleForm.ad_soyad} onChange={e => setD('ad_soyad', e.target.value)}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 mt-1 text-sm focus:outline-none focus:border-blue-400" />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-sm text-gray-500">Sınıf</label>
+                    <select value={duzenleForm.sinif} onChange={e => setD('sinif', e.target.value)}
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 mt-1 text-sm focus:outline-none focus:border-blue-400">
+                      {[2,3,4,5,6,7,8].map(s => <option key={s} value={s}>{s}. Sınıf</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-sm text-gray-500">Tip</label>
+                    <select value={duzenleForm.ogrenci_tipi} onChange={e => setD('ogrenci_tipi', e.target.value)}
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 mt-1 text-sm focus:outline-none focus:border-blue-400">
+                      <option value="kurs">Kurs</option>
+                      <option value="deneme_kulubu">Deneme Kulübü</option>
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-sm text-gray-500">Kayıt Tarihi</label>
+                  <input type="date" value={duzenleForm.kayit_tarihi} onChange={e => setD('kayit_tarihi', e.target.value)}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 mt-1 text-sm focus:outline-none focus:border-blue-400" />
+                </div>
+              </div>
+              <div className="flex gap-2 mt-4">
+                <button onClick={guncelle} disabled={islem}
+                  className="flex-1 bg-blue-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
+                  {islem ? 'Kaydediliyor...' : 'Güncelle'}
+                </button>
+                <button onClick={() => setDuzenleId(null)}
+                  className="flex-1 bg-gray-100 text-gray-700 py-2 rounded-lg text-sm font-medium hover:bg-gray-200">
+                  İptal
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="flex items-center justify-between mb-6">
           <div>
@@ -105,10 +188,20 @@ export default function OgrencilerPage() {
                     <td className="px-4 py-3 text-gray-600">{o.veliler?.ad_soyad || '-'}</td>
                     <td className="px-4 py-3 text-gray-600">{o.veliler?.telefon || '-'}</td>
                     <td className="px-4 py-3">
-                      <Link href={`/ogrenciler/${o.id}`}
-                        className="text-xs bg-gray-100 text-gray-600 px-3 py-1 rounded-lg hover:bg-blue-100 hover:text-blue-700">
-                        Detay →
-                      </Link>
+                      <div className="flex gap-2">
+                        <Link href={`/ogrenciler/${o.id}`}
+                          className="text-xs bg-gray-100 text-gray-600 px-3 py-1 rounded-lg hover:bg-blue-100 hover:text-blue-700">
+                          Detay
+                        </Link>
+                        <button onClick={() => duzenleAc(o)}
+                          className="text-xs bg-yellow-50 text-yellow-700 border border-yellow-200 px-3 py-1 rounded-lg hover:bg-yellow-100">
+                          Düzenle
+                        </button>
+                        <button onClick={() => sil(o.id, o.ad_soyad)}
+                          className="text-xs bg-red-50 text-red-600 border border-red-200 px-3 py-1 rounded-lg hover:bg-red-100">
+                          Sil
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
