@@ -50,19 +50,28 @@ export default function Home() {
       ggGelir, ggGider, bankaGelir, bankaGider, taksitGelir, personelGider
     ] = await Promise.all([
       supabase.from('ogrenciler').select('id', { count: 'exact' }).eq('aktif', true),
-      supabase.from('taksitler').select('tutar').eq('durum', 'odendi').gte('odeme_tarihi', buAyBaslangic).lt('odeme_tarihi', buAySon),
+      // odeme_tarihi olan tüm taksitler (hem tam hem kısmi ödeme)
+      supabase.from('taksitler').select('tutar, odendi_tutar').gte('odeme_tarihi', buAyBaslangic).lt('odeme_tarihi', buAySon),
       supabase.from('taksitler').select('tutar').neq('durum', 'odendi').gte('vade_tarihi', bugun),
       supabase.from('taksitler').select('tutar').neq('durum', 'odendi').lt('vade_tarihi', bugun),
       supabase.from('gelir_gider').select('tutar').eq('tur', 'gelir').not('kategori', 'in', `(${KANTIN_KATEGORILERI.join(',')})`),
       supabase.from('gelir_gider').select('tutar').eq('tur', 'gider').not('kategori', 'in', `(${KANTIN_KATEGORILERI.join(',')})`),
       supabase.from('banka_hareketleri').select('tutar').eq('tur', 'gelir'),
       supabase.from('banka_hareketleri').select('tutar').eq('tur', 'gider'),
-      supabase.from('taksitler').select('tutar').eq('durum', 'odendi'),
+      // Toplam gelir için: tam ödendi olanlar + kısmi ödeme odendi_tutar'ı
+      supabase.from('taksitler').select('tutar, odendi_tutar, durum'),
       supabase.from('personel_odemeler').select('brut_tutar, sgk_isveren, personel!inner(aktif)').eq('personel.aktif', true),
     ])
 
+    // odendi_tutar varsa onu kullan (yeni kayıtlar), yoksa tutar (eski tam ödemeler)
+    const taksitToplamGelir = (taksitGelir.data || []).reduce((s, t: { tutar: number; odendi_tutar: number | null; durum: string }) => {
+      if (t.odendi_tutar !== null && t.odendi_tutar !== undefined) return s + t.odendi_tutar
+      if (t.durum === 'odendi') return s + t.tutar
+      return s
+    }, 0)
+
     const toplamGelir =
-      (taksitGelir.data || []).reduce((s, t) => s + t.tutar, 0) +
+      taksitToplamGelir +
       (ggGelir.data || []).reduce((s, r) => s + r.tutar, 0) +
       (bankaGelir.data || []).reduce((s, r) => s + r.tutar, 0)
 
@@ -73,7 +82,8 @@ export default function Home() {
 
     setIstatistik({
       toplamOgrenci: ogrenci.count || 0,
-      buAyTahsilat: (tahsil.data || []).reduce((s, t) => s + t.tutar, 0),
+      buAyTahsilat: (tahsil.data || []).reduce((s, t: { tutar: number; odendi_tutar: number | null }) =>
+        s + (t.odendi_tutar !== null && t.odendi_tutar !== undefined ? t.odendi_tutar : t.tutar), 0),
       bekleyenTaksit: (bekleyen.data || []).reduce((s, t) => s + t.tutar, 0),
       gecikenTaksit: (geciken.data || []).reduce((s, t) => s + t.tutar, 0),
       toplamGelir,

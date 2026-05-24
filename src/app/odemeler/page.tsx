@@ -87,13 +87,17 @@ export default function OdemelerPage() {
         const { error } = await supabase.from('taksitler').update({
           durum: 'odendi', odeme_tarihi: tahsilForm.tarih,
           odeme_yontemi: tahsilForm.yontem, makbuz_no: tahsilForm.makbuz || null,
+          odendi_tutar: t.tutar,
         }).eq('id', t.id)
         if (error) { alert('Hata: ' + error.message); setTahsilYukleniyor(false); return }
         kalan -= t.tutar
       } else {
-        const { error } = await supabase.from('taksitler')
-          .update({ tutar: Math.round(t.tutar - kalan) })
-          .eq('id', t.id)
+        const { error } = await supabase.from('taksitler').update({
+          tutar: Math.round(t.tutar - kalan),
+          odeme_tarihi: tahsilForm.tarih,
+          odeme_yontemi: tahsilForm.yontem,
+          odendi_tutar: Math.round(kalan),
+        }).eq('id', t.id)
         if (error) { alert('Hata: ' + error.message); setTahsilYukleniyor(false); return }
         kalan = 0
       }
