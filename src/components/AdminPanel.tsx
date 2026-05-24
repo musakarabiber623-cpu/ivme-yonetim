@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { adminMi, girisYap, cikisYap } from '@/lib/auth'
+import { adminMi, girisYap, adminCikis } from '@/lib/auth'
 
 type Props = {
   onDegis: (yetki: boolean) => void
@@ -32,7 +32,7 @@ export default function AdminPanel({ onDegis }: Props) {
   }
 
   function cikis() {
-    cikisYap()
+    adminCikis()
     setAdmin(false)
     onDegis(false)
   }
