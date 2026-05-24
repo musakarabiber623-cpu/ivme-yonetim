@@ -29,6 +29,12 @@ export default function Home() {
     setGirisYapildi(loggedIn)
     setIsAdmin(adminMi())
     if (loggedIn) getir()
+
+    const handleVisibility = () => {
+      if (!document.hidden && girisYapildiMi()) getir()
+    }
+    document.addEventListener('visibilitychange', handleVisibility)
+    return () => document.removeEventListener('visibilitychange', handleVisibility)
   }, [])
 
   async function getir() {

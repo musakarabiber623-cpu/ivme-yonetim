@@ -90,15 +90,22 @@ export default function OgrenciDetayPage() {
     if (!tutar || tutar <= 0) { alert('Geçerli bir tutar giriniz.'); return }
     setTahsilYukleniyor(true)
 
-    const { data: odenmemis } = await supabase
+    const { data: odenmemis, error: fetchErr } = await supabase
       .from('taksitler')
       .select('id, tutar')
       .eq('odeme_plan_id', tahsilPlanId)
       .neq('durum', 'odendi')
       .order('taksit_no', { ascending: true })
 
+    if (fetchErr) { alert('Hata: ' + fetchErr.message); setTahsilYukleniyor(false); return }
+
+    // Tıklanan taksit ile başla, fazla ödeme sonraki taksitlere aktarılır
+    const liste = odenmemis || []
+    const baslangic = liste.findIndex(t => t.id === tahsilId)
+    const sira = baslangic >= 0 ? liste.slice(baslangic) : liste
+
     let kalan = tutar
-    for (const t of (odenmemis || [])) {
+    for (const t of sira) {
       if (kalan <= 0) break
       if (kalan >= t.tutar) {
         const { error } = await supabase.from('taksitler').update({
@@ -109,15 +116,17 @@ export default function OgrenciDetayPage() {
         if (error) { alert('Hata: ' + error.message); setTahsilYukleniyor(false); return }
         kalan -= t.tutar
       } else {
-        // Kısmi ödeme: taksit bakiyesi düşürülür, bekliyor kalır
-        await supabase.from('taksitler').update({ tutar: t.tutar - kalan }).eq('id', t.id)
+        const { error } = await supabase.from('taksitler')
+          .update({ tutar: Math.round(t.tutar - kalan) })
+          .eq('id', t.id)
+        if (error) { alert('Hata: ' + error.message); setTahsilYukleniyor(false); return }
         kalan = 0
       }
     }
 
     setTahsilId(null)
     setTahsilPlanId(null)
-    getir()
+    await getir()
     setTahsilYukleniyor(false)
   }
 
