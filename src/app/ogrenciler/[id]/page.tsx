@@ -135,9 +135,11 @@ export default function OgrenciDetayPage() {
 
   const tumTaksitler = planlar.flatMap(p => p.taksitler || [])
   const bugun = new Date(); bugun.setHours(0, 0, 0, 0)
-  const toplamBorc = tumTaksitler.reduce((s, t) => s + t.tutar, 0)
-  const odenen = tumTaksitler.filter(t => t.durum === 'odendi').reduce((s, t) => s + t.tutar, 0)
+  // Plan.toplam_ucret kullan — kısmi ödemeler taksit tutarını düşürür,
+  // bu yüzden toplamBorc olarak plan tutarı baz alınır, odenen = toplam - kalan
+  const toplamBorc = planlar.reduce((s, p) => s + p.toplam_ucret, 0)
   const kalan = tumTaksitler.filter(t => t.durum !== 'odendi').reduce((s, t) => s + t.tutar, 0)
+  const odenen = toplamBorc - kalan
   const odenenSayisi = tumTaksitler.filter(t => t.durum === 'odendi').length
   const bekleyenSayisi = tumTaksitler.filter(t => t.durum !== 'odendi' && new Date(t.vade_tarihi) >= bugun).length
   const gecikenSayisi = tumTaksitler.filter(t => t.durum !== 'odendi' && new Date(t.vade_tarihi) < bugun).length
