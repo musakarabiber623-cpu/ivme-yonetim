@@ -22,7 +22,16 @@ type Taksit = {
   vade_tarihi: string
   odeme_tarihi: string | null
   durum: string
-  odeme_planlari: { odeme_turu: string; donem: string }
+  odeme_yontemi: string | null
+}
+
+type Plan = {
+  id: number
+  odeme_turu: string
+  donem: string
+  toplam_ucret: number
+  baslangic_tarihi: string
+  taksitler: Taksit[]
 }
 
 type Sonuc = {
@@ -34,46 +43,70 @@ type Sonuc = {
   deneme_sinavlari: { sinav_adi: string; sinav_tarihi: string }
 }
 
+const odemeTuruYazi: Record<string, string> = {
+  kurs_taksitli: 'Kurs — Taksitli',
+  kurs_pesin: 'Kurs — Peşin',
+  deneme_paket: 'Deneme Kulübü — Paket',
+  deneme_tekil: 'Deneme Kulübü — Tekil',
+}
+
 export default function OgrenciDetayPage() {
   const { id } = useParams()
   const [ogrenci, setOgrenci] = useState<Ogrenci | null>(null)
-  const [taksitler, setTaksitler] = useState<Taksit[]>([])
+  const [planlar, setPlanlar] = useState<Plan[]>([])
   const [sonuclar, setSonuclar] = useState<Sonuc[]>([])
   const [yukleniyor, setYukleniyor] = useState(true)
-  const [sekme, setSekme] = useState<'genel' | 'odemeler' | 'sinavlar'>('genel')
+  const [sekme, setSekme] = useState<'genel' | 'odemeler' | 'sinavlar'>('odemeler')
 
-  useEffect(() => {
-    async function getir() {
-      const [o, t, s] = await Promise.all([
-        supabase.from('ogrenciler').select('*, veliler(ad_soyad, telefon, telefon_2, email)').eq('id', id).single(),
-        supabase.from('taksitler').select('*, odeme_planlari(odeme_turu, donem)').eq('odeme_planlari.ogrenci_id', id).order('vade_tarihi'),
-        supabase.from('sinav_sonuclari').select('*, deneme_sinavlari(sinav_adi, sinav_tarihi)').eq('ogrenci_id', id).order('created_at', { ascending: false }),
-      ])
-      setOgrenci(o.data)
-      setTaksitler(t.data || [])
-      setSonuclar(s.data || [])
-      setYukleniyor(false)
-    }
-    getir()
-  }, [id])
+  const [tahsilId, setTahsilId] = useState<number | null>(null)
+  const [tahsilForm, setTahsilForm] = useState({
+    tarih: new Date().toISOString().split('T')[0],
+    yontem: 'nakit',
+  })
+  const [tahsilYukleniyor, setTahsilYukleniyor] = useState(false)
 
-  async function odemeAl(taksitId: number) {
+  useEffect(() => { getir() }, [id])
+
+  async function getir() {
+    const [o, p, s] = await Promise.all([
+      supabase.from('ogrenciler').select('*, veliler(ad_soyad, telefon, telefon_2, email)').eq('id', id).single(),
+      supabase.from('odeme_planlari')
+        .select('id, odeme_turu, donem, toplam_ucret, baslangic_tarihi, taksitler(id, taksit_no, tutar, vade_tarihi, odeme_tarihi, durum, odeme_yontemi)')
+        .eq('ogrenci_id', id)
+        .order('baslangic_tarihi'),
+      supabase.from('sinav_sonuclari').select('*, deneme_sinavlari(sinav_adi, sinav_tarihi)').eq('ogrenci_id', id).order('created_at', { ascending: false }),
+    ])
+    setOgrenci(o.data)
+    setPlanlar((p.data || []) as Plan[])
+    setSonuclar(s.data || [])
+    setYukleniyor(false)
+  }
+
+  async function tahsilEt() {
+    if (!tahsilId) return
+    setTahsilYukleniyor(true)
     const { error } = await supabase.from('taksitler').update({
       durum: 'odendi',
-      odeme_tarihi: new Date().toISOString().split('T')[0],
-      odeme_yontemi: 'nakit',
-    }).eq('id', taksitId)
-    if (error) { alert('Hata: ' + error.message); return }
-    const t = await supabase.from('taksitler').select('*, odeme_planlari(odeme_turu, donem)').eq('odeme_planlari.ogrenci_id', id).order('vade_tarihi')
-    setTaksitler(t.data || [])
+      odeme_tarihi: tahsilForm.tarih,
+      odeme_yontemi: tahsilForm.yontem,
+    }).eq('id', tahsilId)
+    if (error) { alert('Hata: ' + error.message); setTahsilYukleniyor(false); return }
+    setTahsilId(null)
+    getir()
+    setTahsilYukleniyor(false)
   }
 
   if (yukleniyor) return <main className="min-h-screen bg-gray-50 p-8"><p className="text-gray-400">Yükleniyor...</p></main>
   if (!ogrenci) return <main className="min-h-screen bg-gray-50 p-8"><p className="text-gray-400">Öğrenci bulunamadı.</p></main>
 
-  const toplamBorc = taksitler.reduce((s, t) => s + t.tutar, 0)
-  const odenen = taksitler.filter(t => t.durum === 'odendi').reduce((s, t) => s + t.tutar, 0)
-  const kalan = toplamBorc - odenen
+  const tumTaksitler = planlar.flatMap(p => p.taksitler || [])
+  const toplamBorc = tumTaksitler.reduce((s, t) => s + t.tutar, 0)
+  const odenen = tumTaksitler.filter(t => t.durum === 'odendi').reduce((s, t) => s + t.tutar, 0)
+  const kalan = tumTaksitler.filter(t => t.durum !== 'odendi').reduce((s, t) => s + t.tutar, 0)
+  const odenenSayisi = tumTaksitler.filter(t => t.durum === 'odendi').length
+  const bekleyenSayisi = tumTaksitler.filter(t => t.durum === 'bekliyor').length
+  const gecikenSayisi = tumTaksitler.filter(t => t.durum === 'gecikti').length
+
   const enIyiNet = sonuclar.length > 0 ? Math.max(...sonuclar.map(s => s.net_puan || 0)) : null
   const ortNet = sonuclar.length > 0
     ? Math.round(sonuclar.reduce((s, r) => s + (r.net_puan || 0), 0) / sonuclar.length * 100) / 100
@@ -89,45 +122,170 @@ export default function OgrenciDetayPage() {
     <main className="min-h-screen bg-gray-50 p-8">
       <div className="max-w-4xl mx-auto">
 
+        {tahsilId !== null && (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+            <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-sm">
+              <h2 className="font-semibold text-gray-800 mb-4">Tahsilat Al</h2>
+              <div className="space-y-3">
+                <div>
+                  <label className="text-sm text-gray-500">Ödeme Tarihi</label>
+                  <input type="date" value={tahsilForm.tarih}
+                    onChange={e => setTahsilForm(f => ({ ...f, tarih: e.target.value }))}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 mt-1 text-sm focus:outline-none focus:border-blue-400" />
+                </div>
+                <div>
+                  <label className="text-sm text-gray-500">Ödeme Yöntemi</label>
+                  <select value={tahsilForm.yontem}
+                    onChange={e => setTahsilForm(f => ({ ...f, yontem: e.target.value }))}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 mt-1 text-sm focus:outline-none focus:border-blue-400">
+                    <option value="nakit">Nakit</option>
+                    <option value="kart">Kart</option>
+                    <option value="havale">Havale / EFT</option>
+                  </select>
+                </div>
+              </div>
+              <div className="flex gap-2 mt-4">
+                <button onClick={tahsilEt} disabled={tahsilYukleniyor}
+                  className="flex-1 bg-green-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50">
+                  {tahsilYukleniyor ? 'Kaydediliyor...' : 'Tahsil Et'}
+                </button>
+                <button onClick={() => setTahsilId(null)}
+                  className="flex-1 bg-gray-100 text-gray-700 py-2 rounded-lg text-sm font-medium hover:bg-gray-200">
+                  İptal
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="mb-6">
           <Link href="/ogrenciler" className="text-sm text-gray-400 hover:text-gray-600">← Öğrenciler</Link>
           <div className="flex items-center justify-between mt-1">
             <h1 className="text-2xl font-bold text-gray-800">{ogrenci.ad_soyad}</h1>
             <span className={`px-3 py-1 rounded-full text-sm font-medium ${ogrenci.ogrenci_tipi === 'kurs' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>
-              {ogrenci.ogrenci_tipi === 'kurs' ? 'Kurs Öğrencisi' : 'Deneme Kulübü'}
+              {ogrenci.ogrenci_tipi === 'kurs' ? 'Kurs Öğrencisi' : 'Deneme Kulübü'} — {ogrenci.sinif}. Sınıf
             </span>
           </div>
         </div>
 
-        <div className="grid grid-cols-4 gap-3 mb-6">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
           <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-            <p className="text-xs text-gray-500">Sınıf</p>
-            <p className="text-xl font-bold text-gray-800 mt-1">{ogrenci.sinif}. Sınıf</p>
+            <p className="text-xs text-gray-500">Toplam Ücret</p>
+            <p className="text-lg font-bold text-gray-800 mt-1">₺{toplamBorc.toLocaleString('tr-TR')}</p>
           </div>
-          <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-            <p className="text-xs text-gray-500">Toplam Borç</p>
-            <p className="text-xl font-bold text-gray-800 mt-1">₺{toplamBorc.toLocaleString('tr-TR')}</p>
+          <div className="bg-white rounded-xl p-4 shadow-sm border border-green-100">
+            <p className="text-xs text-gray-500">Ödenen</p>
+            <p className="text-lg font-bold text-green-600 mt-1">₺{odenen.toLocaleString('tr-TR')}</p>
           </div>
-          <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+          <div className="bg-white rounded-xl p-4 shadow-sm border border-orange-100">
             <p className="text-xs text-gray-500">Kalan</p>
-            <p className="text-xl font-bold text-orange-500 mt-1">₺{kalan.toLocaleString('tr-TR')}</p>
+            <p className="text-lg font-bold text-orange-500 mt-1">₺{kalan.toLocaleString('tr-TR')}</p>
           </div>
           <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-            <p className="text-xs text-gray-500">Ortalama Net</p>
-            <p className="text-xl font-bold text-purple-600 mt-1">{ortNet ?? '-'}</p>
+            <p className="text-xs text-gray-500">Taksit Durumu</p>
+            <p className="text-lg font-bold text-gray-800 mt-1">
+              <span className="text-green-600">{odenenSayisi}</span>
+              <span className="text-gray-400 text-sm font-normal">/{tumTaksitler.length} ödendi</span>
+            </p>
+          </div>
+          <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+            <p className="text-xs text-gray-500">Bekleyen / Geciken</p>
+            <p className="text-lg font-bold mt-1">
+              <span className="text-orange-500">{bekleyenSayisi}</span>
+              <span className="text-gray-300 mx-1">/</span>
+              <span className="text-red-500">{gecikenSayisi}</span>
+            </p>
           </div>
         </div>
 
         <div className="flex gap-2 mb-6">
-          {(['genel', 'odemeler', 'sinavlar'] as const).map(s => (
+          {(['odemeler', 'genel', 'sinavlar'] as const).map(s => (
             <button key={s} onClick={() => setSekme(s)}
               className={`px-4 py-1.5 rounded-full text-sm font-medium border transition-all ${
                 sekme === s ? 'bg-gray-800 text-white border-gray-800' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'
               }`}>
-              {s === 'genel' ? 'Genel Bilgi' : s === 'odemeler' ? 'Ödemeler' : 'Sınav Sonuçları'}
+              {s === 'genel' ? 'Genel Bilgi' : s === 'odemeler' ? 'Ödeme Planı' : 'Sınav Sonuçları'}
             </button>
           ))}
         </div>
+
+        {sekme === 'odemeler' && (
+          <div className="space-y-4">
+            {planlar.length === 0 ? (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8 text-center">
+                <p className="text-gray-400">Ödeme planı bulunamadı.</p>
+                <Link href="/odemeler/yeni-plan" className="inline-block mt-3 text-sm text-blue-600 hover:underline">
+                  + Ödeme planı oluştur
+                </Link>
+              </div>
+            ) : planlar.map(plan => {
+              const planOdenen = (plan.taksitler || []).filter(t => t.durum === 'odendi').length
+              const planToplam = (plan.taksitler || []).length
+              const planOdenenTutar = (plan.taksitler || []).filter(t => t.durum === 'odendi').reduce((s, t) => s + t.tutar, 0)
+              const progress = planToplam > 0 ? (planOdenen / planToplam) * 100 : 0
+
+              return (
+                <div key={plan.id} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                  <div className="px-5 py-4 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
+                    <div>
+                      <p className="font-semibold text-gray-800">{odemeTuruYazi[plan.odeme_turu] || plan.odeme_turu}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">{plan.donem}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-semibold text-gray-800">₺{plan.toplam_ucret.toLocaleString('tr-TR')}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        <span className="text-green-600 font-medium">{planOdenen}/{planToplam}</span> taksit •{' '}
+                        <span className="text-green-600">₺{planOdenenTutar.toLocaleString('tr-TR')}</span> ödendi
+                      </p>
+                    </div>
+                  </div>
+                  <div className="h-1.5 bg-gray-100">
+                    <div className="h-full bg-green-500 transition-all" style={{ width: `${progress}%` }} />
+                  </div>
+                  <table className="w-full text-sm">
+                    <thead className="border-b border-gray-100">
+                      <tr>
+                        <th className="text-left px-4 py-2.5 text-gray-400 font-medium text-xs">Taksit</th>
+                        <th className="text-left px-4 py-2.5 text-gray-400 font-medium text-xs">Tutar</th>
+                        <th className="text-left px-4 py-2.5 text-gray-400 font-medium text-xs">Vade</th>
+                        <th className="text-left px-4 py-2.5 text-gray-400 font-medium text-xs">Durum</th>
+                        <th className="text-left px-4 py-2.5 text-gray-400 font-medium text-xs">Ödeme Tarihi</th>
+                        <th className="text-left px-4 py-2.5 text-gray-400 font-medium text-xs"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(plan.taksitler || []).sort((a, b) => a.taksit_no - b.taksit_no).map((t, i) => (
+                        <tr key={t.id} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}>
+                          <td className="px-4 py-3 text-gray-600">{t.taksit_no}. Taksit</td>
+                          <td className="px-4 py-3 font-semibold text-gray-800">₺{t.tutar.toLocaleString('tr-TR')}</td>
+                          <td className="px-4 py-3 text-gray-600">{new Date(t.vade_tarihi).toLocaleDateString('tr-TR')}</td>
+                          <td className="px-4 py-3">
+                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${durumRenk(t.durum)}`}>
+                              {t.durum === 'odendi' ? 'Ödendi' : t.durum === 'gecikti' ? 'Gecikti' : 'Bekliyor'}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-gray-500 text-xs">
+                            {t.durum === 'odendi' && t.odeme_tarihi
+                              ? `${new Date(t.odeme_tarihi).toLocaleDateString('tr-TR')} · ${t.odeme_yontemi || 'nakit'}`
+                              : '-'}
+                          </td>
+                          <td className="px-4 py-3">
+                            {t.durum !== 'odendi' && (
+                              <button onClick={() => { setTahsilId(t.id); setTahsilForm({ tarih: new Date().toISOString().split('T')[0], yontem: 'nakit' }) }}
+                                className="text-xs bg-green-50 text-green-700 border border-green-200 px-3 py-1 rounded-lg hover:bg-green-100">
+                                Tahsil Et
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )
+            })}
+          </div>
+        )}
 
         {sekme === 'genel' && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
@@ -173,53 +331,6 @@ export default function OgrenciDetayPage() {
                 </div>
               </div>
             </div>
-          </div>
-        )}
-
-        {sekme === 'odemeler' && (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-            {taksitler.length === 0 ? (
-              <p className="text-gray-400 text-center py-12">Ödeme planı bulunamadı.</p>
-            ) : (
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 border-b border-gray-100">
-                  <tr>
-                    <th className="text-left px-4 py-3 text-gray-500 font-medium">Dönem</th>
-                    <th className="text-left px-4 py-3 text-gray-500 font-medium">Taksit</th>
-                    <th className="text-left px-4 py-3 text-gray-500 font-medium">Tutar</th>
-                    <th className="text-left px-4 py-3 text-gray-500 font-medium">Vade</th>
-                    <th className="text-left px-4 py-3 text-gray-500 font-medium">Durum</th>
-                    <th className="text-left px-4 py-3 text-gray-500 font-medium">İşlem</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {taksitler.map((t, i) => (
-                    <tr key={t.id} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                      <td className="px-4 py-3 text-gray-600">{t.odeme_planlari?.donem}</td>
-                      <td className="px-4 py-3 text-gray-600">{t.taksit_no}. Taksit</td>
-                      <td className="px-4 py-3 font-semibold text-gray-800">₺{t.tutar.toLocaleString('tr-TR')}</td>
-                      <td className="px-4 py-3 text-gray-600">{new Date(t.vade_tarihi).toLocaleDateString('tr-TR')}</td>
-                      <td className="px-4 py-3">
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${durumRenk(t.durum)}`}>
-                          {t.durum === 'odendi' ? 'Ödendi' : t.durum === 'gecikti' ? 'Gecikti' : 'Bekliyor'}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        {t.durum !== 'odendi' && (
-                          <button onClick={() => odemeAl(t.id)}
-                            className="text-xs bg-green-50 text-green-700 border border-green-200 px-3 py-1 rounded-lg hover:bg-green-100">
-                            Tahsil Et
-                          </button>
-                        )}
-                        {t.durum === 'odendi' && (
-                          <span className="text-xs text-gray-400">{t.odeme_tarihi && new Date(t.odeme_tarihi).toLocaleDateString('tr-TR')}</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
           </div>
         )}
 
