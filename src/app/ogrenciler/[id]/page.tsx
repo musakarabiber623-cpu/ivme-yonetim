@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
-import { useParams } from 'next/navigation'
+import { useRouter, useParams } from 'next/navigation'
 
 type Ogrenci = {
   id: number
@@ -19,6 +19,7 @@ type Taksit = {
   id: number
   taksit_no: number
   tutar: number
+  odendi_tutar: number | null
   vade_tarihi: string
   odeme_tarihi: string | null
   durum: string
@@ -34,15 +35,6 @@ type Plan = {
   taksitler: Taksit[]
 }
 
-type Sonuc = {
-  id: number
-  dogru: number
-  yanlis: number
-  bos: number
-  net_puan: number | null
-  deneme_sinavlari: { sinav_adi: string; sinav_tarihi: string }
-}
-
 const odemeTuruYazi: Record<string, string> = {
   kurs_taksitli: 'Kurs — Taksitli',
   kurs_pesin: 'Kurs — Peşin',
@@ -52,11 +44,11 @@ const odemeTuruYazi: Record<string, string> = {
 
 export default function OgrenciDetayPage() {
   const { id } = useParams()
+  const router = useRouter()
   const [ogrenci, setOgrenci] = useState<Ogrenci | null>(null)
   const [planlar, setPlanlar] = useState<Plan[]>([])
-  const [sonuclar, setSonuclar] = useState<Sonuc[]>([])
   const [yukleniyor, setYukleniyor] = useState(true)
-  const [sekme, setSekme] = useState<'genel' | 'odemeler' | 'sinavlar'>('odemeler')
+  const [sekme, setSekme] = useState<'odemeler' | 'genel'>('odemeler')
 
   const [tahsilId, setTahsilId] = useState<number | null>(null)
   const [tahsilPlanId, setTahsilPlanId] = useState<number | null>(null)
@@ -70,17 +62,15 @@ export default function OgrenciDetayPage() {
   useEffect(() => { getir() }, [id])
 
   async function getir() {
-    const [o, p, s] = await Promise.all([
+    const [o, p] = await Promise.all([
       supabase.from('ogrenciler').select('*, veliler(ad_soyad, telefon, telefon_2, email)').eq('id', id).single(),
       supabase.from('odeme_planlari')
-        .select('id, odeme_turu, donem, toplam_ucret, baslangic_tarihi, taksitler(id, taksit_no, tutar, vade_tarihi, odeme_tarihi, durum, odeme_yontemi)')
+        .select('id, odeme_turu, donem, toplam_ucret, baslangic_tarihi, taksitler(id, taksit_no, tutar, odendi_tutar, vade_tarihi, odeme_tarihi, durum, odeme_yontemi)')
         .eq('ogrenci_id', id)
         .order('baslangic_tarihi'),
-      supabase.from('sinav_sonuclari').select('*, deneme_sinavlari(sinav_adi, sinav_tarihi)').eq('ogrenci_id', id).order('created_at', { ascending: false }),
     ])
     setOgrenci(o.data)
     setPlanlar((p.data || []) as Plan[])
-    setSonuclar(s.data || [])
     setYukleniyor(false)
   }
 
@@ -146,27 +136,29 @@ export default function OgrenciDetayPage() {
 
   const tumTaksitler = planlar.flatMap(p => p.taksitler || [])
   const bugun = new Date(); bugun.setHours(0, 0, 0, 0)
-  // Plan.toplam_ucret kullan — kısmi ödemeler taksit tutarını düşürür,
-  // bu yüzden toplamBorc olarak plan tutarı baz alınır, odenen = toplam - kalan
   const toplamBorc = planlar.reduce((s, p) => s + p.toplam_ucret, 0)
-  const kalan = tumTaksitler.filter(t => t.durum !== 'odendi').reduce((s, t) => s + t.tutar, 0)
-  const odenen = toplamBorc - kalan
-  const odenenSayisi = tumTaksitler.filter(t => t.durum === 'odendi').length
-  const bekleyenSayisi = tumTaksitler.filter(t => t.durum !== 'odendi' && new Date(t.vade_tarihi) >= bugun).length
-  const gecikenSayisi = tumTaksitler.filter(t => t.durum !== 'odendi' && new Date(t.vade_tarihi) < bugun).length
 
-  const enIyiNet = sonuclar.length > 0 ? Math.max(...sonuclar.map(s => s.net_puan || 0)) : null
-  const ortNet = sonuclar.length > 0
-    ? Math.round(sonuclar.reduce((s, r) => s + (r.net_puan || 0), 0) / sonuclar.length * 100) / 100
-    : null
+  // odendi_tutar kullan — toplamBorc - kalan formülü taksit tutarları değişince hatalı verir
+  const odenen = tumTaksitler.reduce((s, t) => {
+    if (t.odendi_tutar != null) return s + t.odendi_tutar
+    if (t.durum === 'odendi') return s + t.tutar
+    return s
+  }, 0)
+  const kalan = toplamBorc - odenen
+
+  const odenenSayisi = tumTaksitler.filter(t => t.durum === 'odendi').length
+  const bekleyenSayisi = tumTaksitler.filter(t => t.durum !== 'odendi' && t.odendi_tutar == null && new Date(t.vade_tarihi) >= bugun).length
+  const gecikenSayisi = tumTaksitler.filter(t => t.durum !== 'odendi' && t.odendi_tutar == null && new Date(t.vade_tarihi) < bugun).length
 
   const durumRenk = (t: Taksit) => {
     if (t.durum === 'odendi') return 'bg-green-100 text-green-700'
+    if (t.odendi_tutar != null) return 'bg-blue-100 text-blue-700'
     if (new Date(t.vade_tarihi) < bugun) return 'bg-red-100 text-red-700'
     return 'bg-orange-100 text-orange-700'
   }
   const durumYazi = (t: Taksit) => {
     if (t.durum === 'odendi') return 'Ödendi'
+    if (t.odendi_tutar != null) return 'Kısmi Ödendi'
     if (new Date(t.vade_tarihi) < bugun) return 'Gecikti'
     return 'Bekliyor'
   }
@@ -218,7 +210,10 @@ export default function OgrenciDetayPage() {
         )}
 
         <div className="mb-6">
-          <Link href="/ogrenciler" className="text-sm text-gray-400 hover:text-gray-600">← Öğrenciler</Link>
+          <div className="flex gap-4 mb-2">
+            <Link href="/" className="text-sm text-gray-400 hover:text-gray-600">← Ana Sayfa</Link>
+            <button onClick={() => router.back()} className="text-sm text-gray-400 hover:text-gray-600">← Geri</button>
+          </div>
           <div className="flex items-center justify-between mt-1">
             <h1 className="text-2xl font-bold text-gray-800">{ogrenci.ad_soyad}</h1>
             <span className={`px-3 py-1 rounded-full text-sm font-medium ${ogrenci.ogrenci_tipi === 'kurs' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>
@@ -258,12 +253,12 @@ export default function OgrenciDetayPage() {
         </div>
 
         <div className="flex gap-2 mb-6">
-          {(['odemeler', 'genel', 'sinavlar'] as const).map(s => (
+          {(['odemeler', 'genel'] as const).map(s => (
             <button key={s} onClick={() => setSekme(s)}
               className={`px-4 py-1.5 rounded-full text-sm font-medium border transition-all ${
                 sekme === s ? 'bg-gray-800 text-white border-gray-800' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'
               }`}>
-              {s === 'genel' ? 'Genel Bilgi' : s === 'odemeler' ? 'Ödeme Planı' : 'Sınav Sonuçları'}
+              {s === 'genel' ? 'Genel Bilgi' : 'Ödeme Planı'}
             </button>
           ))}
         </div>
@@ -280,8 +275,12 @@ export default function OgrenciDetayPage() {
             ) : planlar.map(plan => {
               const planOdenen = (plan.taksitler || []).filter(t => t.durum === 'odendi').length
               const planToplam = (plan.taksitler || []).length
-              const planOdenenTutar = (plan.taksitler || []).filter(t => t.durum === 'odendi').reduce((s, t) => s + t.tutar, 0)
-              const progress = planToplam > 0 ? (planOdenen / planToplam) * 100 : 0
+              const planOdenenTutar = (plan.taksitler || []).reduce((s, t) => {
+                if (t.odendi_tutar != null) return s + t.odendi_tutar
+                if (t.durum === 'odendi') return s + t.tutar
+                return s
+              }, 0)
+              const progress = planToplam > 0 ? Math.min((planOdenenTutar / plan.toplam_ucret) * 100, 100) : 0
 
               return (
                 <div key={plan.id} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
@@ -294,7 +293,7 @@ export default function OgrenciDetayPage() {
                       <p className="text-sm font-semibold text-gray-800">₺{plan.toplam_ucret.toLocaleString('tr-TR')}</p>
                       <p className="text-xs text-gray-500 mt-0.5">
                         <span className="text-green-600 font-medium">{planOdenen}/{planToplam}</span> taksit •{' '}
-                        <span className="text-green-600">₺{planOdenenTutar.toLocaleString('tr-TR')}</span> ödendi
+                        <span className="text-green-600">₺{planOdenenTutar.toLocaleString('tr-TR')}</span> tahsil edildi
                       </p>
                     </div>
                   </div>
@@ -308,7 +307,7 @@ export default function OgrenciDetayPage() {
                         <th className="text-left px-4 py-2.5 text-gray-400 font-medium text-xs">Tutar</th>
                         <th className="text-left px-4 py-2.5 text-gray-400 font-medium text-xs">Vade</th>
                         <th className="text-left px-4 py-2.5 text-gray-400 font-medium text-xs">Durum</th>
-                        <th className="text-left px-4 py-2.5 text-gray-400 font-medium text-xs">Ödeme Tarihi</th>
+                        <th className="text-left px-4 py-2.5 text-gray-400 font-medium text-xs">Ödeme</th>
                         <th className="text-left px-4 py-2.5 text-gray-400 font-medium text-xs"></th>
                       </tr>
                     </thead>
@@ -316,7 +315,12 @@ export default function OgrenciDetayPage() {
                       {(plan.taksitler || []).sort((a, b) => a.taksit_no - b.taksit_no).map((t, i) => (
                         <tr key={t.id} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}>
                           <td className="px-4 py-3 text-gray-600">{t.taksit_no}. Taksit</td>
-                          <td className="px-4 py-3 font-semibold text-gray-800">₺{t.tutar.toLocaleString('tr-TR')}</td>
+                          <td className="px-4 py-3">
+                            <span className="font-semibold text-gray-800">₺{t.tutar.toLocaleString('tr-TR')}</span>
+                            {t.odendi_tutar != null && t.durum !== 'odendi' && (
+                              <span className="block text-xs text-blue-600">₺{t.odendi_tutar.toLocaleString('tr-TR')} ödendi</span>
+                            )}
+                          </td>
                           <td className="px-4 py-3 text-gray-600">{new Date(t.vade_tarihi).toLocaleDateString('tr-TR')}</td>
                           <td className="px-4 py-3">
                             <span className={`px-2 py-1 rounded-full text-xs font-medium ${durumRenk(t)}`}>
@@ -324,7 +328,7 @@ export default function OgrenciDetayPage() {
                             </span>
                           </td>
                           <td className="px-4 py-3 text-gray-500 text-xs">
-                            {t.durum === 'odendi' && t.odeme_tarihi
+                            {(t.durum === 'odendi' || t.odendi_tutar != null) && t.odeme_tarihi
                               ? `${new Date(t.odeme_tarihi).toLocaleDateString('tr-TR')} · ${t.odeme_yontemi || 'nakit'}`
                               : '-'}
                           </td>
@@ -395,46 +399,6 @@ export default function OgrenciDetayPage() {
                 </div>
               </div>
             </div>
-          </div>
-        )}
-
-        {sekme === 'sinavlar' && (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-            {sonuclar.length === 0 ? (
-              <p className="text-gray-400 text-center py-12">Henüz sınav sonucu yok.</p>
-            ) : (
-              <>
-                {enIyiNet && (
-                  <div className="px-4 py-3 bg-purple-50 border-b border-purple-100 text-sm text-purple-700">
-                    En iyi net: <strong>{enIyiNet}</strong> — Ortalama: <strong>{ortNet}</strong>
-                  </div>
-                )}
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-50 border-b border-gray-100">
-                    <tr>
-                      <th className="text-left px-4 py-3 text-gray-500 font-medium">Sınav</th>
-                      <th className="text-left px-4 py-3 text-gray-500 font-medium">Tarih</th>
-                      <th className="text-center px-4 py-3 text-gray-500 font-medium">D</th>
-                      <th className="text-center px-4 py-3 text-gray-500 font-medium">Y</th>
-                      <th className="text-center px-4 py-3 text-gray-500 font-medium">B</th>
-                      <th className="text-right px-4 py-3 text-gray-500 font-medium">Net</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sonuclar.map((s, i) => (
-                      <tr key={s.id} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                        <td className="px-4 py-3 font-medium text-gray-800">{s.deneme_sinavlari?.sinav_adi}</td>
-                        <td className="px-4 py-3 text-gray-600">{new Date(s.deneme_sinavlari?.sinav_tarihi).toLocaleDateString('tr-TR')}</td>
-                        <td className="px-4 py-3 text-center text-green-600">{s.dogru}</td>
-                        <td className="px-4 py-3 text-center text-red-500">{s.yanlis}</td>
-                        <td className="px-4 py-3 text-center text-gray-400">{s.bos}</td>
-                        <td className="px-4 py-3 text-right font-bold text-gray-800">{s.net_puan}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </>
-            )}
           </div>
         )}
       </div>
