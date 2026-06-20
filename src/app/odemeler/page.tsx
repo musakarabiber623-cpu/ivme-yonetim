@@ -151,6 +151,12 @@ export default function OdemelerPage() {
     return new Date(t.vade_tarihi) < bugun ? 'gecikti' : 'bekliyor'
   }
 
+  const hesaplaGosterimDurum = (t: Taksit) => {
+    if (t.durum === 'odendi') return 'odendi'
+    if (t.odendi_tutar != null) return 'kismi'
+    return new Date(t.vade_tarihi) < bugun ? 'gecikti' : 'bekliyor'
+  }
+
   const filtrelendi = taksitler.filter(t => {
     const hDurum = hesaplaDurum(t)
     const gDurum = hesaplaGosterimDurum(t)
@@ -165,12 +171,6 @@ export default function OdemelerPage() {
   const buAyTahsil = taksitler
     .filter(t => t.odeme_tarihi?.startsWith(new Date().toISOString().slice(0, 7)))
     .reduce((s, t) => s + (t.odendi_tutar != null ? t.odendi_tutar : (t.durum === 'odendi' ? t.tutar : 0)), 0)
-
-  const hesaplaGosterimDurum = (t: Taksit) => {
-    if (t.durum === 'odendi') return 'odendi'
-    if (t.odendi_tutar != null) return 'kismi'
-    return new Date(t.vade_tarihi) < bugun ? 'gecikti' : 'bekliyor'
-  }
 
   const durumRenk = (t: Taksit) => {
     const d = hesaplaGosterimDurum(t)
