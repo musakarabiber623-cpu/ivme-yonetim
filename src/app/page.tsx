@@ -366,7 +366,7 @@ export default function Home() {
                   <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} axisLine={false} tickLine={false}
                     tickFormatter={v => v >= 1000 ? `${(v/1000).toFixed(0)}k` : String(v)} />
                   <Tooltip
-                    formatter={(v: number) => [`₺${v.toLocaleString('tr-TR')}`, 'Tahsilat']}
+                    formatter={(v) => [`₺${Number(v ?? 0).toLocaleString('tr-TR')}`, 'Tahsilat']}
                     contentStyle={{ borderRadius: 12, border: 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.1)', fontSize: 12 }}
                   />
                   <Bar dataKey="tahsilat" radius={[6,6,0,0]} maxBarSize={48}>
