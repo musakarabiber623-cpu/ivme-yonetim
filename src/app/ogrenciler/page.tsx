@@ -80,18 +80,28 @@ export default function OgrencilerPage() {
       if (yeniUcret > 0) {
         await supabase.from('odeme_planlari').update({ toplam_ucret: yeniUcret }).eq('id', duzenleForm.plan_id)
 
+        // Sadece ödenmemiş taksitleri güncelle
         const { data: taksitler } = await supabase
           .from('taksitler').select('id, taksit_no')
-          .eq('odeme_plan_id', duzenleForm.plan_id).order('taksit_no')
+          .eq('odeme_plan_id', duzenleForm.plan_id).neq('durum', 'odendi').is('odendi_tutar', null).order('taksit_no')
 
         if (taksitler && taksitler.length > 0) {
+          const { data: odenmis } = await supabase
+            .from('taksitler').select('odendi_tutar, tutar, durum')
+            .eq('odeme_plan_id', duzenleForm.plan_id)
+            .or('durum.eq.odendi,odendi_tutar.not.is.null')
+          const odenmisTop = (odenmis || []).reduce((s, t: { odendi_tutar: number | null; tutar: number; durum: string }) =>
+            s + (t.odendi_tutar != null ? t.odendi_tutar : t.tutar), 0)
+          const kalanUcret = yeniUcret - odenmisTop
           const cnt = taksitler.length
-          const base = Math.floor(yeniUcret / cnt)
-          const son = Math.round(yeniUcret - base * (cnt - 1))
-          for (let i = 0; i < cnt; i++) {
-            await supabase.from('taksitler')
-              .update({ tutar: i === cnt - 1 ? son : base })
-              .eq('id', taksitler[i].id)
+          if (kalanUcret > 0) {
+            const base = Math.floor(kalanUcret / cnt)
+            const son = Math.round(kalanUcret - base * (cnt - 1))
+            for (let i = 0; i < cnt; i++) {
+              await supabase.from('taksitler')
+                .update({ tutar: i === cnt - 1 ? son : base })
+                .eq('id', taksitler[i].id)
+            }
           }
         }
       }
@@ -124,7 +134,7 @@ export default function OgrencilerPage() {
   }))
 
   return (
-    <main className="min-h-screen bg-gray-50 p-8">
+    <main className="min-h-screen bg-gray-50 p-4 sm:p-8">
       <div className="max-w-5xl mx-auto">
 
         {duzenleId !== null && (
@@ -182,29 +192,29 @@ export default function OgrencilerPage() {
           </div>
         )}
 
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
           <div>
             <Link href="/" className="text-sm text-gray-400 hover:text-gray-600">← Ana Sayfa</Link>
-            <h1 className="text-2xl font-bold text-gray-800 mt-1">Öğrenciler</h1>
+            <h1 className="text-xl sm:text-2xl font-bold text-gray-800 mt-1">Öğrenciler</h1>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 flex-wrap">
             <AdminPanel onDegis={setYetki} />
             {yetki && (
               <Link href="/ogrenciler/yeni"
-                className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700">
-                + Yeni Öğrenci
+                className="bg-blue-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-blue-700">
+                + Yeni
               </Link>
             )}
           </div>
         </div>
 
-        <div className="flex gap-3 mb-3">
+        <div className="flex flex-col sm:flex-row gap-2 mb-3">
           <input
             type="text" placeholder="İsme göre ara..."
             value={arama} onChange={e => setArama(e.target.value)}
             className="flex-1 bg-white border border-gray-200 rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-blue-400"
           />
-          <div className="flex gap-2">
+          <div className="flex gap-1.5 flex-wrap">
             {(['hepsi', 'kurs', 'deneme_kulubu'] as const).map(f => (
               <button key={f} onClick={() => setFiltre(f)}
                 className={`px-4 py-2 rounded-lg text-sm font-medium border transition-all ${
@@ -240,15 +250,16 @@ export default function OgrencilerPage() {
           <p className="text-gray-400 text-center py-12">Öğrenci bulunamadı.</p>
         ) : (
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[480px]">
               <thead className="bg-gray-50 border-b border-gray-100">
                 <tr>
-                  <th className="text-left px-4 py-3 text-gray-500 font-medium">Ad Soyad</th>
-                  <th className="text-left px-4 py-3 text-gray-500 font-medium">Sınıf</th>
-                  <th className="text-left px-4 py-3 text-gray-500 font-medium">Tip</th>
-                  <th className="text-left px-4 py-3 text-gray-500 font-medium">Veli</th>
-                  <th className="text-left px-4 py-3 text-gray-500 font-medium">Telefon</th>
-                  <th className="text-left px-4 py-3 text-gray-500 font-medium"></th>
+                  <th className="text-left px-3 py-3 text-gray-500 font-medium">Ad Soyad</th>
+                  <th className="text-left px-3 py-3 text-gray-500 font-medium">Sınıf</th>
+                  <th className="text-left px-3 py-3 text-gray-500 font-medium hidden sm:table-cell">Tip</th>
+                  <th className="text-left px-3 py-3 text-gray-500 font-medium hidden md:table-cell">Veli</th>
+                  <th className="text-left px-3 py-3 text-gray-500 font-medium hidden md:table-cell">Telefon</th>
+                  <th className="text-left px-3 py-3 text-gray-500 font-medium"></th>
                 </tr>
               </thead>
               <tbody>
@@ -258,34 +269,34 @@ export default function OgrencilerPage() {
                     <tr key={o.id} className={`transition-colors ${
                       tamOdendi ? 'bg-green-50 hover:bg-green-100' : i % 2 === 0 ? 'bg-white hover:bg-blue-50' : 'bg-gray-50 hover:bg-blue-50'
                     }`}>
-                      <td className="px-4 py-3 font-medium text-gray-800">
+                      <td className="px-3 py-3 font-medium text-gray-800">
                         {o.ad_soyad}
-                        {tamOdendi && <span className="ml-2 text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full font-normal">✓ ödendi</span>}
+                        {tamOdendi && <span className="ml-1.5 text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full font-normal">✓</span>}
                       </td>
-                      <td className="px-4 py-3 text-gray-600">{o.sinif}. Sınıf</td>
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-3 text-gray-600 whitespace-nowrap">{o.sinif}. Sınıf</td>
+                      <td className="px-3 py-3 hidden sm:table-cell">
                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                           o.ogrenci_tipi === 'kurs' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'
                         }`}>
-                          {o.ogrenci_tipi === 'kurs' ? 'Kurs' : 'Deneme Kulübü'}
+                          {o.ogrenci_tipi === 'kurs' ? 'Kurs' : 'Deneme'}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-gray-600">{o.veliler?.ad_soyad || '-'}</td>
-                      <td className="px-4 py-3 text-gray-600">{o.veliler?.telefon || '-'}</td>
-                      <td className="px-4 py-3">
-                        <div className="flex gap-2">
+                      <td className="px-3 py-3 text-gray-600 hidden md:table-cell">{o.veliler?.ad_soyad || '-'}</td>
+                      <td className="px-3 py-3 text-gray-600 hidden md:table-cell">{o.veliler?.telefon || '-'}</td>
+                      <td className="px-3 py-3">
+                        <div className="flex gap-1.5">
                           <Link href={`/ogrenciler/${o.id}`}
-                            className="text-xs bg-gray-100 text-gray-600 px-3 py-1 rounded-lg hover:bg-blue-100 hover:text-blue-700">
+                            className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-lg hover:bg-blue-100 hover:text-blue-700 whitespace-nowrap">
                             Detay
                           </Link>
                           {yetki && (
                             <>
                               <button onClick={() => duzenleAc(o)}
-                                className="text-xs bg-yellow-50 text-yellow-700 border border-yellow-200 px-3 py-1 rounded-lg hover:bg-yellow-100">
+                                className="text-xs bg-yellow-50 text-yellow-700 border border-yellow-200 px-2 py-1 rounded-lg hover:bg-yellow-100">
                                 Düzenle
                               </button>
                               <button onClick={() => sil(o.id, o.ad_soyad)}
-                                className="text-xs bg-red-50 text-red-600 border border-red-200 px-3 py-1 rounded-lg hover:bg-red-100">
+                                className="text-xs bg-red-50 text-red-600 border border-red-200 px-2 py-1 rounded-lg hover:bg-red-100">
                                 Sil
                               </button>
                             </>
@@ -297,6 +308,7 @@ export default function OgrencilerPage() {
                 })}
               </tbody>
             </table>
+            </div>
           </div>
         )}
 

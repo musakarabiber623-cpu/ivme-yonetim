@@ -9,6 +9,7 @@ type Taksit = {
   odeme_plan_id: number
   taksit_no: number
   tutar: number
+  odendi_tutar: number | null
   vade_tarihi: string
   odeme_tarihi: string | null
   odeme_yontemi: string | null
@@ -69,20 +70,20 @@ export default function OdemelerPage() {
     setTahsilYukleniyor(true)
 
     const { data: odenmemis, error: fetchErr } = await supabase
-      .from('taksitler').select('id, tutar')
+      .from('taksitler').select('id, tutar, odendi_tutar')
       .eq('odeme_plan_id', tahsilPlanId).neq('durum', 'odendi')
       .order('vade_tarihi', { ascending: true })
 
     if (fetchErr) { alert('Hata: ' + fetchErr.message); setTahsilYukleniyor(false); return }
 
     let kalan = tutar
-    for (const t of odenmemis || []) {
+    for (const t of (odenmemis || []) as { id: number; tutar: number; odendi_tutar: number | null }[]) {
       if (kalan <= 0) break
       if (kalan >= t.tutar) {
         const { error } = await supabase.from('taksitler').update({
           durum: 'odendi', odeme_tarihi: tahsilForm.tarih,
           odeme_yontemi: tahsilForm.yontem, makbuz_no: tahsilForm.makbuz || null,
-          odendi_tutar: t.tutar,
+          odendi_tutar: (t.odendi_tutar || 0) + t.tutar,
         }).eq('id', t.id)
         if (error) { alert('Hata: ' + error.message); setTahsilYukleniyor(false); return }
         if (tahsilForm.yontem === 'kredi_karti') {
@@ -152,7 +153,8 @@ export default function OdemelerPage() {
 
   const filtrelendi = taksitler.filter(t => {
     const hDurum = hesaplaDurum(t)
-    const durumUygun = durum === 'hepsi' || hDurum === durum
+    const gDurum = hesaplaGosterimDurum(t)
+    const durumUygun = durum === 'hepsi' || hDurum === durum || gDurum === durum
     const adSoyad = t.odeme_planlari?.ogrenciler?.ad_soyad?.toLowerCase() || ''
     const aramaUygun = !arama || adSoyad.includes(arama.toLowerCase())
     return durumUygun && aramaUygun
@@ -160,11 +162,20 @@ export default function OdemelerPage() {
 
   const toplamBeklenen = taksitler.filter(t => t.durum !== 'odendi' && new Date(t.vade_tarihi) >= bugun).reduce((s, t) => s + t.tutar, 0)
   const toplamGeciken = taksitler.filter(t => t.durum !== 'odendi' && new Date(t.vade_tarihi) < bugun).reduce((s, t) => s + t.tutar, 0)
-  const buAyTahsil = taksitler.filter(t => t.durum === 'odendi' && t.odeme_tarihi?.startsWith(new Date().toISOString().slice(0, 7))).reduce((s, t) => s + t.tutar, 0)
+  const buAyTahsil = taksitler
+    .filter(t => t.odeme_tarihi?.startsWith(new Date().toISOString().slice(0, 7)))
+    .reduce((s, t) => s + (t.odendi_tutar != null ? t.odendi_tutar : (t.durum === 'odendi' ? t.tutar : 0)), 0)
+
+  const hesaplaGosterimDurum = (t: Taksit) => {
+    if (t.durum === 'odendi') return 'odendi'
+    if (t.odendi_tutar != null) return 'kismi'
+    return new Date(t.vade_tarihi) < bugun ? 'gecikti' : 'bekliyor'
+  }
 
   const durumRenk = (t: Taksit) => {
-    const d = hesaplaDurum(t)
+    const d = hesaplaGosterimDurum(t)
     if (d === 'odendi') return 'bg-green-100 text-green-700'
+    if (d === 'kismi') return 'bg-blue-100 text-blue-700'
     if (d === 'gecikti') return 'bg-red-100 text-red-700'
     return 'bg-orange-100 text-orange-700'
   }
@@ -173,7 +184,7 @@ export default function OdemelerPage() {
   const editTaksit = editId ? taksitler.find(t => t.id === editId) : null
 
   return (
-    <main className="min-h-screen bg-gray-50 p-8">
+    <main className="min-h-screen bg-gray-50 p-4 sm:p-8">
       <div className="max-w-5xl mx-auto">
 
         {/* Tahsilat Modalı */}
@@ -290,22 +301,22 @@ export default function OdemelerPage() {
           </div>
         )}
 
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
           <div>
             <Link href="/" className="text-sm text-gray-400 hover:text-gray-600">← Ana Sayfa</Link>
-            <h1 className="text-2xl font-bold text-gray-800 mt-1">Ödemeler & Taksitler</h1>
+            <h1 className="text-xl sm:text-2xl font-bold text-gray-800 mt-1">Ödemeler & Taksitler</h1>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 flex-wrap">
             <AdminPanel onDegis={setYetki} />
             {yetki && (
-              <Link href="/odemeler/yeni-plan" className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700">
-                + Yeni Ödeme Planı
+              <Link href="/odemeler/yeni-plan" className="bg-blue-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-blue-700">
+                + Yeni Plan
               </Link>
             )}
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-4 mb-6">
+        <div className="grid grid-cols-3 gap-3 sm:gap-4 mb-6">
           <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
             <p className="text-sm text-gray-500">Bu Ay Tahsilat</p>
             <p className="text-2xl font-bold text-green-600 mt-1">₺{Math.round(buAyTahsil).toLocaleString('tr-TR')}</p>
@@ -320,14 +331,14 @@ export default function OdemelerPage() {
           </div>
         </div>
 
-        <div className="flex gap-3 mb-4">
+        <div className="flex flex-col sm:flex-row gap-2 mb-4">
           <input type="text" placeholder="Öğrenci adına göre ara..."
             value={arama} onChange={e => setArama(e.target.value)}
             className="flex-1 bg-white border border-gray-200 rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-blue-400" />
-          <div className="flex gap-2">
+          <div className="flex gap-1.5 flex-wrap">
             {['hepsi','bekliyor','gecikti','odendi'].map(f => (
               <button key={f} onClick={() => setDurum(f)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium border transition-all ${
+                className={`px-3 py-2 rounded-lg text-sm font-medium border transition-all ${
                   durum === f ? 'bg-gray-800 text-white border-gray-800' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'
                 }`}>
                 {f === 'hepsi' ? 'Hepsi' : f === 'bekliyor' ? 'Bekliyor' : f === 'gecikti' ? 'Gecikti' : 'Ödendi'}
@@ -342,7 +353,8 @@ export default function OdemelerPage() {
           <p className="text-gray-400 text-center py-12">Kayıt bulunamadı.</p>
         ) : (
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[600px]">
               <thead className="bg-gray-50 border-b border-gray-100">
                 <tr>
                   <th className="text-left px-4 py-3 text-gray-500 font-medium">Öğrenci</th>
@@ -373,7 +385,7 @@ export default function OdemelerPage() {
                     <td className="px-4 py-3 text-gray-600">{new Date(t.vade_tarihi).toLocaleDateString('tr-TR')}</td>
                     <td className="px-4 py-3">
                       <span className={`px-2 py-1 rounded-full text-xs font-medium ${durumRenk(t)}`}>
-                        {hesaplaDurum(t) === 'odendi' ? 'Ödendi' : hesaplaDurum(t) === 'gecikti' ? 'Gecikti' : 'Bekliyor'}
+                        {hesaplaGosterimDurum(t) === 'odendi' ? 'Ödendi' : hesaplaGosterimDurum(t) === 'kismi' ? 'Kısmi Ödendi' : hesaplaGosterimDurum(t) === 'gecikti' ? 'Gecikti' : 'Bekliyor'}
                       </span>
                     </td>
                     <td className="px-4 py-3">
@@ -401,6 +413,7 @@ export default function OdemelerPage() {
                 ))}
               </tbody>
             </table>
+            </div>
             <div className="px-4 py-2 border-t border-gray-100 text-xs text-gray-400">
               {filtrelendi.length} kayıt
             </div>

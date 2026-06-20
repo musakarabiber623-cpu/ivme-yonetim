@@ -119,13 +119,23 @@ export default function Home() {
     const { data: planlar } = await supabase.from('odeme_planlari').select('id, toplam_ucret')
     let guncellenen = 0
     for (const plan of planlar || []) {
+      // Sadece ödenmemiş taksitleri güncelle
       const { data: taksitler } = await supabase
         .from('taksitler').select('id, taksit_no')
-        .eq('odeme_plan_id', plan.id).order('taksit_no')
+        .eq('odeme_plan_id', plan.id).neq('durum', 'odendi').is('odendi_tutar', null).order('taksit_no')
       if (!taksitler || taksitler.length === 0) continue
+      // Ödenmiş taksitlerin toplamını düş
+      const { data: odenmis } = await supabase
+        .from('taksitler').select('odendi_tutar, tutar, durum')
+        .eq('odeme_plan_id', plan.id)
+        .or('durum.eq.odendi,odendi_tutar.not.is.null')
+      const odenmisTop = (odenmis || []).reduce((s: number, t: { odendi_tutar: number | null; tutar: number; durum: string }) =>
+        s + (t.odendi_tutar != null ? t.odendi_tutar : t.tutar), 0)
+      const kalanUcret = plan.toplam_ucret - odenmisTop
       const cnt = taksitler.length
-      const base = Math.floor(plan.toplam_ucret / cnt)
-      const son = Math.round(plan.toplam_ucret - base * (cnt - 1))
+      if (cnt === 0 || kalanUcret <= 0) continue
+      const base = Math.floor(kalanUcret / cnt)
+      const son = Math.round(kalanUcret - base * (cnt - 1))
       for (let i = 0; i < cnt; i++) {
         await supabase.from('taksitler')
           .update({ tutar: i === cnt - 1 ? son : base })
@@ -226,15 +236,15 @@ export default function Home() {
 
   // ─── Ana Sayfa / Dashboard ─────────────────────────────────────────────────
   return (
-    <main className="min-h-screen bg-gray-50 p-8">
+    <main className="min-h-screen bg-gray-50 p-4 sm:p-8">
       <div className="max-w-5xl mx-auto">
 
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex flex-wrap items-start justify-between gap-3 mb-6 sm:mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-gray-800">Antakya İvme Akademi</h1>
-            <p className="text-gray-500 mt-1">Yönetim Paneli</p>
+            <h1 className="text-xl sm:text-3xl font-bold text-gray-800">Antakya İvme Akademi</h1>
+            <p className="text-gray-500 mt-1 text-sm">Yönetim Paneli</p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2">
             <span className={`text-xs px-3 py-1.5 rounded-full font-medium ${isAdmin ? 'bg-green-100 text-green-700' : 'bg-blue-50 text-blue-600'}`}>
               {isAdmin ? '🔓 Yönetici' : '👁️ Ziyaretçi'}
             </span>
@@ -290,34 +300,34 @@ export default function Home() {
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-4 mb-4">
-          <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-            <p className="text-sm text-gray-500">Toplam Öğrenci</p>
-            <p className="text-3xl font-bold text-gray-800 mt-1">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4 mb-3 sm:mb-4">
+          <div className="bg-white rounded-xl p-4 sm:p-6 shadow-sm border border-gray-100">
+            <p className="text-xs sm:text-sm text-gray-500">Toplam Öğrenci</p>
+            <p className="text-2xl sm:text-3xl font-bold text-gray-800 mt-1">
               {yukleniyor ? '...' : istatistik.toplamOgrenci}
             </p>
           </div>
-          <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-            <p className="text-sm text-gray-500">Bu Ay Tahsilat</p>
-            <p className="text-3xl font-bold text-green-600 mt-1">
+          <div className="bg-white rounded-xl p-4 sm:p-6 shadow-sm border border-gray-100">
+            <p className="text-xs sm:text-sm text-gray-500">Bu Ay Tahsilat</p>
+            <p className="text-xl sm:text-3xl font-bold text-green-600 mt-1">
               {yukleniyor ? '...' : `₺${istatistik.buAyTahsilat.toLocaleString('tr-TR')}`}
             </p>
           </div>
-          <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-            <p className="text-sm text-gray-500">Bekleyen Taksit</p>
-            <p className="text-3xl font-bold text-orange-500 mt-1">
+          <div className="bg-white rounded-xl p-4 sm:p-6 shadow-sm border border-gray-100">
+            <p className="text-xs sm:text-sm text-gray-500">Bekleyen Taksit</p>
+            <p className="text-xl sm:text-3xl font-bold text-orange-500 mt-1">
               {yukleniyor ? '...' : `₺${istatistik.bekleyenTaksit.toLocaleString('tr-TR')}`}
             </p>
           </div>
-          <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-            <p className="text-sm text-gray-500">Geciken Taksit</p>
-            <p className="text-3xl font-bold text-red-500 mt-1">
+          <div className="bg-white rounded-xl p-4 sm:p-6 shadow-sm border border-gray-100">
+            <p className="text-xs sm:text-sm text-gray-500">Geciken Taksit</p>
+            <p className="text-xl sm:text-3xl font-bold text-red-500 mt-1">
               {yukleniyor ? '...' : `₺${istatistik.gecikenTaksit.toLocaleString('tr-TR')}`}
             </p>
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-4 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-4 sm:mb-6">
           <div className="bg-white rounded-xl p-5 shadow-sm border border-green-100">
             <p className="text-sm text-gray-500">Toplam Gelir <span className="text-xs text-gray-400">(kantin hariç)</span></p>
             <p className="text-2xl font-bold text-green-600 mt-1">
@@ -338,7 +348,7 @@ export default function Home() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3">
           {menuler.map(m => (
             <Link key={m.href} href={m.href}
               className={`bg-white rounded-xl p-6 shadow-sm border border-gray-100 ${m.renk} hover:shadow-md transition-all`}>

@@ -82,7 +82,7 @@ export default function OgrenciDetayPage() {
 
     const { data: odenmemis, error: fetchErr } = await supabase
       .from('taksitler')
-      .select('id, tutar')
+      .select('id, tutar, odendi_tutar')
       .eq('odeme_plan_id', tahsilPlanId)
       .neq('durum', 'odendi')
       .order('vade_tarihi', { ascending: true })
@@ -90,14 +90,14 @@ export default function OgrenciDetayPage() {
     if (fetchErr) { alert('Hata: ' + fetchErr.message); setTahsilYukleniyor(false); return }
 
     let kalan = tutar
-    for (const t of odenmemis || []) {
+    for (const t of (odenmemis || []) as { id: number; tutar: number; odendi_tutar: number | null }[]) {
       if (kalan <= 0) break
       if (kalan >= t.tutar) {
         const { error } = await supabase.from('taksitler').update({
           durum: 'odendi',
           odeme_tarihi: tahsilForm.tarih,
           odeme_yontemi: tahsilForm.yontem,
-          odendi_tutar: t.tutar,
+          odendi_tutar: (t.odendi_tutar || 0) + t.tutar,
         }).eq('id', t.id)
         if (error) { alert('Hata: ' + error.message); setTahsilYukleniyor(false); return }
         if (tahsilForm.yontem === 'kredi_karti') {
@@ -131,8 +131,8 @@ export default function OgrenciDetayPage() {
     setTahsilYukleniyor(false)
   }
 
-  if (yukleniyor) return <main className="min-h-screen bg-gray-50 p-8"><p className="text-gray-400">Yükleniyor...</p></main>
-  if (!ogrenci) return <main className="min-h-screen bg-gray-50 p-8"><p className="text-gray-400">Öğrenci bulunamadı.</p></main>
+  if (yukleniyor) return <main className="min-h-screen bg-gray-50 p-4 sm:p-8"><p className="text-gray-400">Yükleniyor...</p></main>
+  if (!ogrenci) return <main className="min-h-screen bg-gray-50 p-4 sm:p-8"><p className="text-gray-400">Öğrenci bulunamadı.</p></main>
 
   const tumTaksitler = planlar.flatMap(p => p.taksitler || [])
   const bugun = new Date(); bugun.setHours(0, 0, 0, 0)
@@ -164,7 +164,7 @@ export default function OgrenciDetayPage() {
   }
 
   return (
-    <main className="min-h-screen bg-gray-50 p-8">
+    <main className="min-h-screen bg-gray-50 p-4 sm:p-8">
       <div className="max-w-4xl mx-auto">
 
         {tahsilId !== null && (
@@ -214,15 +214,15 @@ export default function OgrenciDetayPage() {
             <Link href="/" className="text-sm text-gray-400 hover:text-gray-600">← Ana Sayfa</Link>
             <button onClick={() => router.back()} className="text-sm text-gray-400 hover:text-gray-600">← Geri</button>
           </div>
-          <div className="flex items-center justify-between mt-1">
-            <h1 className="text-2xl font-bold text-gray-800">{ogrenci.ad_soyad}</h1>
-            <span className={`px-3 py-1 rounded-full text-sm font-medium ${ogrenci.ogrenci_tipi === 'kurs' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>
-              {ogrenci.ogrenci_tipi === 'kurs' ? 'Kurs Öğrencisi' : 'Deneme Kulübü'} — {ogrenci.sinif}. Sınıf
+          <div className="flex flex-wrap items-start justify-between gap-2 mt-1">
+            <h1 className="text-xl sm:text-2xl font-bold text-gray-800">{ogrenci.ad_soyad}</h1>
+            <span className={`px-3 py-1 rounded-full text-xs sm:text-sm font-medium ${ogrenci.ogrenci_tipi === 'kurs' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>
+              {ogrenci.ogrenci_tipi === 'kurs' ? 'Kurs' : 'Deneme'} — {ogrenci.sinif}. Sınıf
             </span>
           </div>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 sm:gap-3 mb-6">
           <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
             <p className="text-xs text-gray-500">Toplam Ücret</p>
             <p className="text-lg font-bold text-gray-800 mt-1">₺{toplamBorc.toLocaleString('tr-TR')}</p>
@@ -300,39 +300,40 @@ export default function OgrenciDetayPage() {
                   <div className="h-1.5 bg-gray-100">
                     <div className="h-full bg-green-500 transition-all" style={{ width: `${progress}%` }} />
                   </div>
-                  <table className="w-full text-sm">
+                  <div className="overflow-x-auto">
+                  <table className="w-full text-sm min-w-[500px]">
                     <thead className="border-b border-gray-100">
                       <tr>
-                        <th className="text-left px-4 py-2.5 text-gray-400 font-medium text-xs">Taksit</th>
-                        <th className="text-left px-4 py-2.5 text-gray-400 font-medium text-xs">Tutar</th>
-                        <th className="text-left px-4 py-2.5 text-gray-400 font-medium text-xs">Vade</th>
-                        <th className="text-left px-4 py-2.5 text-gray-400 font-medium text-xs">Durum</th>
-                        <th className="text-left px-4 py-2.5 text-gray-400 font-medium text-xs">Ödeme</th>
-                        <th className="text-left px-4 py-2.5 text-gray-400 font-medium text-xs"></th>
+                        <th className="text-left px-3 py-2.5 text-gray-400 font-medium text-xs">Taksit</th>
+                        <th className="text-left px-3 py-2.5 text-gray-400 font-medium text-xs">Tutar</th>
+                        <th className="text-left px-3 py-2.5 text-gray-400 font-medium text-xs">Vade</th>
+                        <th className="text-left px-3 py-2.5 text-gray-400 font-medium text-xs">Durum</th>
+                        <th className="text-left px-3 py-2.5 text-gray-400 font-medium text-xs">Ödeme</th>
+                        <th className="text-left px-3 py-2.5 text-gray-400 font-medium text-xs"></th>
                       </tr>
                     </thead>
                     <tbody>
                       {(plan.taksitler || []).sort((a, b) => a.taksit_no - b.taksit_no).map((t, i) => (
                         <tr key={t.id} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}>
-                          <td className="px-4 py-3 text-gray-600">{t.taksit_no}. Taksit</td>
-                          <td className="px-4 py-3">
+                          <td className="px-3 py-3 text-gray-600 whitespace-nowrap">{t.taksit_no}. Taksit</td>
+                          <td className="px-3 py-3 whitespace-nowrap">
                             <span className="font-semibold text-gray-800">₺{t.tutar.toLocaleString('tr-TR')}</span>
                             {t.odendi_tutar != null && t.durum !== 'odendi' && (
                               <span className="block text-xs text-blue-600">₺{t.odendi_tutar.toLocaleString('tr-TR')} ödendi</span>
                             )}
                           </td>
-                          <td className="px-4 py-3 text-gray-600">{new Date(t.vade_tarihi).toLocaleDateString('tr-TR')}</td>
-                          <td className="px-4 py-3">
+                          <td className="px-3 py-3 text-gray-600 whitespace-nowrap">{new Date(t.vade_tarihi).toLocaleDateString('tr-TR')}</td>
+                          <td className="px-3 py-3 whitespace-nowrap">
                             <span className={`px-2 py-1 rounded-full text-xs font-medium ${durumRenk(t)}`}>
                               {durumYazi(t)}
                             </span>
                           </td>
-                          <td className="px-4 py-3 text-gray-500 text-xs">
+                          <td className="px-3 py-3 text-gray-500 text-xs whitespace-nowrap">
                             {(t.durum === 'odendi' || t.odendi_tutar != null) && t.odeme_tarihi
                               ? `${new Date(t.odeme_tarihi).toLocaleDateString('tr-TR')} · ${t.odeme_yontemi || 'nakit'}`
                               : '-'}
                           </td>
-                          <td className="px-4 py-3">
+                          <td className="px-3 py-3 whitespace-nowrap">
                             {t.durum !== 'odendi' && (
                               <button onClick={() => {
                                 setTahsilId(t.id)
@@ -349,6 +350,7 @@ export default function OgrenciDetayPage() {
                       ))}
                     </tbody>
                   </table>
+                  </div>
                 </div>
               )
             })}

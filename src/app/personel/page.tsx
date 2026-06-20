@@ -182,7 +182,7 @@ export default function PersonelPage() {
     .reduce((s, o) => s + o.brut_tutar, 0)
 
   return (
-    <main className="min-h-screen bg-gray-50 p-8">
+    <main className="min-h-screen bg-gray-50 p-4 sm:p-8">
       <div className="max-w-5xl mx-auto">
 
         {duzenleId !== null && (
@@ -258,16 +258,16 @@ export default function PersonelPage() {
           <p className="text-2xl font-bold text-red-500 mt-1">₺{buAyGider.toLocaleString('tr-TR')}</p>
         </div>
 
-        <div className="flex gap-2 mb-6">
+        <div className="flex flex-wrap gap-2 mb-6">
           {(yetki
             ? ['liste', 'odeme_listesi', 'odeme', 'yeni'] as const
             : ['liste', 'odeme_listesi'] as const
           ).map(s => (
             <button key={s} onClick={() => setSekme(s)}
-              className={`px-4 py-1.5 rounded-full text-sm font-medium border transition-all ${
+              className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-all ${
                 sekme === s ? 'bg-gray-800 text-white border-gray-800' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'
               }`}>
-              {s === 'liste' ? 'Personel Listesi' : s === 'odeme_listesi' ? `Ödeme Listesi (${odemeler.length})` : s === 'odeme' ? 'Ödeme Ekle' : '+ Yeni Personel'}
+              {s === 'liste' ? 'Personel' : s === 'odeme_listesi' ? `Ödemeler (${odemeler.length})` : s === 'odeme' ? 'Ödeme Ekle' : '+ Yeni'}
             </button>
           ))}
         </div>
@@ -276,40 +276,41 @@ export default function PersonelPage() {
           <>
             {sekme === 'liste' && (
               <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-                <table className="w-full text-sm">
+                <div className="overflow-x-auto">
+                <table className="w-full text-sm min-w-[400px]">
                   <thead className="bg-gray-50 border-b border-gray-100">
                     <tr>
-                      <th className="text-left px-4 py-3 text-gray-500 font-medium">Ad Soyad</th>
-                      <th className="text-left px-4 py-3 text-gray-500 font-medium">Tip</th>
-                      <th className="text-left px-4 py-3 text-gray-500 font-medium">Ders/Saat Ücreti</th>
-                      <th className="text-left px-4 py-3 text-gray-500 font-medium">Telefon</th>
-                      <th className="text-left px-4 py-3 text-gray-500 font-medium">Başlangıç</th>
-                      <th className="text-left px-4 py-3 text-gray-500 font-medium"></th>
+                      <th className="text-left px-3 py-3 text-gray-500 font-medium">Ad Soyad</th>
+                      <th className="text-left px-3 py-3 text-gray-500 font-medium">Tip</th>
+                      <th className="text-left px-3 py-3 text-gray-500 font-medium hidden sm:table-cell">Ders Ücreti</th>
+                      <th className="text-left px-3 py-3 text-gray-500 font-medium hidden md:table-cell">Telefon</th>
+                      <th className="text-left px-3 py-3 text-gray-500 font-medium hidden md:table-cell">Başlangıç</th>
+                      <th className="text-left px-3 py-3 text-gray-500 font-medium"></th>
                     </tr>
                   </thead>
                   <tbody>
                     {personeller.filter(p => p.aktif).map((p, i) => (
                       <tr key={p.id} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                        <td className="px-4 py-3 font-medium text-gray-800">{p.ad_soyad}</td>
-                        <td className="px-4 py-3">
+                        <td className="px-3 py-3 font-medium text-gray-800">{p.ad_soyad}</td>
+                        <td className="px-3 py-3">
                           <span className={`px-2 py-1 rounded-full text-xs font-medium ${tipRenk[p.personel_tipi]}`}>
                             {tipYazi[p.personel_tipi]}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-gray-600 text-sm">
+                        <td className="px-3 py-3 text-gray-600 text-sm hidden sm:table-cell">
                           {p.ders_basi_ucret ? `₺${p.ders_basi_ucret.toLocaleString('tr-TR')}` : '—'}
                         </td>
-                        <td className="px-4 py-3 text-gray-600">{p.telefon || '-'}</td>
-                        <td className="px-4 py-3 text-gray-600">{new Date(p.baslangic_tarihi).toLocaleDateString('tr-TR')}</td>
-                        <td className="px-4 py-3">
+                        <td className="px-3 py-3 text-gray-600 hidden md:table-cell">{p.telefon || '-'}</td>
+                        <td className="px-3 py-3 text-gray-600 hidden md:table-cell">{new Date(p.baslangic_tarihi).toLocaleDateString('tr-TR')}</td>
+                        <td className="px-3 py-3">
                           {yetki && (
-                            <div className="flex gap-2">
+                            <div className="flex gap-1.5">
                               <button onClick={() => duzenleAc(p)}
-                                className="text-xs bg-yellow-50 text-yellow-700 border border-yellow-200 px-3 py-1 rounded-lg hover:bg-yellow-100">
+                                className="text-xs bg-yellow-50 text-yellow-700 border border-yellow-200 px-2 py-1 rounded-lg hover:bg-yellow-100">
                                 Düzenle
                               </button>
                               <button onClick={() => sil(p.id, p.ad_soyad)}
-                                className="text-xs bg-red-50 text-red-600 border border-red-200 px-3 py-1 rounded-lg hover:bg-red-100">
+                                className="text-xs bg-red-50 text-red-600 border border-red-200 px-2 py-1 rounded-lg hover:bg-red-100">
                                 Sil
                               </button>
                             </div>
@@ -319,6 +320,7 @@ export default function PersonelPage() {
                     ))}
                   </tbody>
                 </table>
+                </div>
               </div>
             )}
 
@@ -414,15 +416,16 @@ export default function PersonelPage() {
                 {odemeler.length === 0 ? (
                   <p className="text-gray-400 text-center py-12">Ödeme kaydı yok.</p>
                 ) : (
-                  <table className="w-full text-sm">
+                  <div className="overflow-x-auto">
+                  <table className="w-full text-sm min-w-[380px]">
                     <thead className="bg-gray-50 border-b border-gray-100">
                       <tr>
-                        <th className="text-left px-4 py-3 text-gray-500 font-medium">Personel</th>
-                        <th className="text-left px-4 py-3 text-gray-500 font-medium">Dönem</th>
-                        <th className="text-left px-4 py-3 text-gray-500 font-medium">Tür</th>
-                        <th className="text-right px-4 py-3 text-gray-500 font-medium">Tutar</th>
-                        <th className="text-right px-4 py-3 text-gray-500 font-medium">Ek Ders</th>
-                        {yetki && <th className="px-4 py-3"></th>}
+                        <th className="text-left px-3 py-3 text-gray-500 font-medium">Personel</th>
+                        <th className="text-left px-3 py-3 text-gray-500 font-medium">Dönem</th>
+                        <th className="text-left px-3 py-3 text-gray-500 font-medium hidden sm:table-cell">Tür</th>
+                        <th className="text-right px-3 py-3 text-gray-500 font-medium">Tutar</th>
+                        <th className="text-right px-3 py-3 text-gray-500 font-medium hidden sm:table-cell">Ek Ders</th>
+                        {yetki && <th className="px-3 py-3"></th>}
                       </tr>
                     </thead>
                     <tbody>
@@ -430,17 +433,17 @@ export default function PersonelPage() {
                         const p = personeller.find(x => x.id === o.personel_id)
                         return (
                           <tr key={o.id} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                            <td className="px-4 py-3 font-medium text-gray-800">{p?.ad_soyad || '—'}</td>
-                            <td className="px-4 py-3 text-gray-600">{o.donem}</td>
-                            <td className="px-4 py-3 text-gray-600 text-xs capitalize">{o.odeme_turu === 'maas' ? 'Maaş' : 'Ek Ders'}</td>
-                            <td className="px-4 py-3 text-right font-semibold text-red-500">₺{o.brut_tutar.toLocaleString('tr-TR')}</td>
-                            <td className="px-4 py-3 text-right text-gray-500">
+                            <td className="px-3 py-3 font-medium text-gray-800">{p?.ad_soyad || '—'}</td>
+                            <td className="px-3 py-3 text-gray-600">{o.donem}</td>
+                            <td className="px-3 py-3 text-gray-600 text-xs capitalize hidden sm:table-cell">{o.odeme_turu === 'maas' ? 'Maaş' : 'Ek Ders'}</td>
+                            <td className="px-3 py-3 text-right font-semibold text-red-500">₺{o.brut_tutar.toLocaleString('tr-TR')}</td>
+                            <td className="px-3 py-3 text-right text-gray-500 hidden sm:table-cell">
                               {o.ek_ders_saati ? `${o.ek_ders_saati} ders` : '—'}
                             </td>
                             {yetki && (
-                              <td className="px-4 py-3">
+                              <td className="px-3 py-3">
                                 <button onClick={() => odemeSil(o.id)}
-                                  className="text-xs bg-red-50 text-red-600 border border-red-200 px-3 py-1 rounded-lg hover:bg-red-100">
+                                  className="text-xs bg-red-50 text-red-600 border border-red-200 px-2 py-1 rounded-lg hover:bg-red-100">
                                   Sil
                                 </button>
                               </td>
@@ -450,6 +453,7 @@ export default function PersonelPage() {
                       })}
                     </tbody>
                   </table>
+                  </div>
                 )}
               </div>
             )}
