@@ -11,9 +11,14 @@ export function adminMi(): boolean {
   return sessionStorage.getItem('ivme_rol') === 'admin'
 }
 
+function yayinla() {
+  window.dispatchEvent(new Event('ivme-auth'))
+}
+
 export function girisYap(kullanici: string, sifre: string): boolean {
   if (kullanici === ADMIN_KULLANICI && sifre === ADMIN_SIFRE) {
     sessionStorage.setItem('ivme_rol', 'admin')
+    yayinla()
     return true
   }
   return false
@@ -21,14 +26,15 @@ export function girisYap(kullanici: string, sifre: string): boolean {
 
 export function ziyaretciGiris(): void {
   sessionStorage.setItem('ivme_rol', 'ziyaretci')
+  yayinla()
 }
 
-// AdminPanel'de kullanılır: admin → ziyaretçi (sayfadan çıkmaz)
 export function adminCikis(): void {
   sessionStorage.setItem('ivme_rol', 'ziyaretci')
+  yayinla()
 }
 
-// Ana sayfada kullanılır: tam oturum kapatma
 export function cikisYap(): void {
   sessionStorage.removeItem('ivme_rol')
+  yayinla()
 }
