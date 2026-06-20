@@ -245,7 +245,7 @@ export default function OdemelerPage() {
         <div className="max-w-4xl mx-auto">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="text-slate-400 text-xs uppercase tracking-widest font-semibold">Tahsilat Yönetimi</p>
+              <Link href="/" className="text-slate-400 text-xs hover:text-slate-200 transition-colors">← Ana Sayfa</Link>
               <h1 className="text-2xl font-bold text-white mt-1">Ödemeler</h1>
             </div>
             <div className="flex items-center gap-2">
