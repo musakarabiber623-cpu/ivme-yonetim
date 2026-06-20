@@ -112,7 +112,7 @@ export default function OgrenciDetayPage() {
           tutar: Math.round(t.tutar - kalan),
           odeme_tarihi: tahsilForm.tarih,
           odeme_yontemi: tahsilForm.yontem,
-          odendi_tutar: Math.round(kalan),
+          odendi_tutar: (t.odendi_tutar || 0) + Math.round(kalan),
         }).eq('id', t.id)
         if (error) { alert('Hata: ' + error.message); setTahsilYukleniyor(false); return }
         if (tahsilForm.yontem === 'kredi_karti') {
