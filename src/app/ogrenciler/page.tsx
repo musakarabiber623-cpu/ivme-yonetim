@@ -4,6 +4,15 @@ import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
 import AdminPanel from '@/components/AdminPanel'
 
+const AVATAR_RENKLER = ['bg-blue-500','bg-violet-500','bg-emerald-500','bg-orange-500','bg-rose-500','bg-cyan-500','bg-amber-500','bg-indigo-500']
+function avatarRenk(isim: string) {
+  const hash = isim.split('').reduce((a, c) => a + c.charCodeAt(0), 0)
+  return AVATAR_RENKLER[hash % AVATAR_RENKLER.length]
+}
+function initials(isim: string) {
+  return isim.split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase()
+}
+
 type Ogrenci = {
   id: number
   ad_soyad: string
@@ -249,66 +258,76 @@ export default function OgrencilerPage() {
         ) : filtrelendi.length === 0 ? (
           <p className="text-gray-400 text-center py-12">Öğrenci bulunamadı.</p>
         ) : (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-            <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[480px]">
-              <thead className="bg-gray-50 border-b border-gray-100">
-                <tr>
-                  <th className="text-left px-3 py-3 text-gray-500 font-medium">Ad Soyad</th>
-                  <th className="text-left px-3 py-3 text-gray-500 font-medium">Sınıf</th>
-                  <th className="text-left px-3 py-3 text-gray-500 font-medium hidden sm:table-cell">Tip</th>
-                  <th className="text-left px-3 py-3 text-gray-500 font-medium hidden md:table-cell">Veli</th>
-                  <th className="text-left px-3 py-3 text-gray-500 font-medium hidden md:table-cell">Telefon</th>
-                  <th className="text-left px-3 py-3 text-gray-500 font-medium"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtrelendi.map((o, i) => {
-                  const tamOdendi = odenmeBitti(o)
-                  return (
-                    <tr key={o.id} className={`transition-colors ${
-                      tamOdendi ? 'bg-green-50 hover:bg-green-100' : i % 2 === 0 ? 'bg-white hover:bg-blue-50' : 'bg-gray-50 hover:bg-blue-50'
-                    }`}>
-                      <td className="px-3 py-3 font-medium text-gray-800">
-                        {o.ad_soyad}
-                        {tamOdendi && <span className="ml-1.5 text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full font-normal">✓</span>}
-                      </td>
-                      <td className="px-3 py-3 text-gray-600 whitespace-nowrap">{o.sinif}. Sınıf</td>
-                      <td className="px-3 py-3 hidden sm:table-cell">
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                          o.ogrenci_tipi === 'kurs' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'
-                        }`}>
-                          {o.ogrenci_tipi === 'kurs' ? 'Kurs' : 'Deneme'}
-                        </span>
-                      </td>
-                      <td className="px-3 py-3 text-gray-600 hidden md:table-cell">{o.veliler?.ad_soyad || '-'}</td>
-                      <td className="px-3 py-3 text-gray-600 hidden md:table-cell">{o.veliler?.telefon || '-'}</td>
-                      <td className="px-3 py-3">
-                        <div className="flex gap-1.5">
-                          <Link href={`/ogrenciler/${o.id}`}
-                            className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-lg hover:bg-blue-100 hover:text-blue-700 whitespace-nowrap">
-                            Detay
-                          </Link>
-                          {yetki && (
-                            <>
-                              <button onClick={() => duzenleAc(o)}
-                                className="text-xs bg-yellow-50 text-yellow-700 border border-yellow-200 px-2 py-1 rounded-lg hover:bg-yellow-100">
-                                Düzenle
-                              </button>
-                              <button onClick={() => sil(o.id, o.ad_soyad)}
-                                className="text-xs bg-red-50 text-red-600 border border-red-200 px-2 py-1 rounded-lg hover:bg-red-100">
-                                Sil
-                              </button>
-                            </>
-                          )}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {filtrelendi.map(o => {
+              const tamOdendi = odenmeBitti(o)
+              const tumTaksitler = (o.odeme_planlari || []).flatMap(p => p.taksitler || [])
+              const odenenSayi = tumTaksitler.filter(t => t.durum === 'odendi').length
+              const toplamSayi = tumTaksitler.length
+              const progress = toplamSayi > 0 ? Math.round((odenenSayi / toplamSayi) * 100) : 0
+              return (
+                <div key={o.id} className={`bg-white rounded-2xl shadow-sm border transition-all hover:shadow-md ${tamOdendi ? 'border-green-200 ring-1 ring-green-100' : 'border-gray-100'}`}>
+                  <div className="p-4">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className={`w-11 h-11 rounded-xl ${avatarRenk(o.ad_soyad)} flex items-center justify-center text-white font-bold text-sm shrink-0`}>
+                        {initials(o.ad_soyad)}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <p className="font-semibold text-gray-800 text-sm truncate">{o.ad_soyad}</p>
+                          {tamOdendi && <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full shrink-0">✓ Ödendi</span>}
                         </div>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-            </div>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className="text-xs text-gray-500">{o.sinif}. Sınıf</span>
+                          <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${o.ogrenci_tipi === 'kurs' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>
+                            {o.ogrenci_tipi === 'kurs' ? 'Kurs' : 'Deneme'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {o.veliler && (
+                      <div className="flex items-center gap-1.5 text-xs text-gray-500 mb-3">
+                        <span>👤</span>
+                        <span className="truncate">{o.veliler.ad_soyad}</span>
+                        {o.veliler.telefon && <span className="text-gray-400">· {o.veliler.telefon}</span>}
+                      </div>
+                    )}
+
+                    {toplamSayi > 0 && (
+                      <div className="mb-3">
+                        <div className="flex justify-between text-xs text-gray-400 mb-1">
+                          <span>Ödeme</span>
+                          <span className={tamOdendi ? 'text-green-600 font-medium' : ''}>{odenenSayi}/{toplamSayi} taksit</span>
+                        </div>
+                        <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                          <div className={`h-full rounded-full transition-all ${tamOdendi ? 'bg-green-500' : 'bg-blue-500'}`} style={{ width: `${progress}%` }} />
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex gap-1.5">
+                      <Link href={`/ogrenciler/${o.id}`}
+                        className="flex-1 text-center text-xs bg-blue-600 text-white py-1.5 rounded-lg hover:bg-blue-700 font-medium">
+                        Detay
+                      </Link>
+                      {yetki && (
+                        <>
+                          <button onClick={() => duzenleAc(o)}
+                            className="text-xs bg-gray-100 text-gray-600 px-3 py-1.5 rounded-lg hover:bg-gray-200">
+                            Düzenle
+                          </button>
+                          <button onClick={() => sil(o.id, o.ad_soyad)}
+                            className="text-xs bg-red-50 text-red-500 px-3 py-1.5 rounded-lg hover:bg-red-100">
+                            Sil
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
           </div>
         )}
 
