@@ -66,6 +66,7 @@ export default function OdemelerPage() {
   const [yetki, setYetki] = useState(false)
   const [arama, setArama] = useState('')
   const [durumFiltre, setDurumFiltre] = useState('hepsi')
+  const [sinifFiltre, setSinifFiltre] = useState(0)
   const [aciklar, setAciklar] = useState<Set<number>>(new Set())
   const [tahsilPlanId, setTahsilPlanId] = useState<number|null>(null)
   const [tahsilTutar, setTahsilTutar] = useState('')
@@ -157,13 +158,19 @@ export default function OdemelerPage() {
       .reduce((s, t) => s + t.tutar, 0)
   , [ogrenciler])
 
+  const sinifSayilari = useMemo(() =>
+    [2,3,4,5,6,7,8].map(s => ({ sinif: s, sayi: ogrenciler.filter(o => o.sinif === s).length }))
+      .filter(x => x.sayi > 0)
+  , [ogrenciler])
+
   const filtrelenmis = useMemo(() =>
     ogrenciler.filter(o => {
       if (arama && !o.ad_soyad.toLowerCase().includes(arama.toLowerCase())) return false
       if (durumFiltre !== 'hepsi' && ogrenciDurum(o) !== durumFiltre) return false
+      if (sinifFiltre !== 0 && o.sinif !== sinifFiltre) return false
       return true
     })
-  , [ogrenciler, arama, durumFiltre])
+  , [ogrenciler, arama, durumFiltre, sinifFiltre])
 
   const gruplar = useMemo(() => {
     const map = new Map<number, Ogrenci[]>()
@@ -304,6 +311,27 @@ export default function OdemelerPage() {
             ))}
           </div>
         </div>
+
+        {/* Sınıf sekmeleri */}
+        {sinifSayilari.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mb-4">
+            <button onClick={() => setSinifFiltre(0)}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                sinifFiltre === 0 ? 'bg-slate-800 text-white' : 'bg-white text-slate-500 border border-gray-200 hover:bg-slate-50'
+              }`}>
+              Tüm Sınıflar
+            </button>
+            {sinifSayilari.map(({ sinif, sayi }) => (
+              <button key={sinif} onClick={() => setSinifFiltre(sinif)}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                  sinifFiltre === sinif ? 'bg-slate-800 text-white' : 'bg-white text-slate-500 border border-gray-200 hover:bg-slate-50'
+                }`}>
+                {sinif}. Sınıf
+                <span className={`ml-1.5 text-xs px-1.5 py-0.5 rounded-full ${sinifFiltre === sinif ? 'bg-slate-600 text-white' : 'bg-slate-100 text-slate-500'}`}>{sayi}</span>
+              </button>
+            ))}
+          </div>
+        )}
 
         {yukleniyor ? (
           <p className="text-center text-slate-400 py-16 text-sm">Yükleniyor...</p>

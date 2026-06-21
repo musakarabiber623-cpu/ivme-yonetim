@@ -4,11 +4,6 @@ import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
 import AdminPanel from '@/components/AdminPanel'
 
-const AVATAR_RENKLER = ['bg-blue-500','bg-violet-500','bg-emerald-500','bg-orange-500','bg-rose-500','bg-cyan-500','bg-amber-500','bg-indigo-500']
-function avatarRenk(isim: string) {
-  const hash = isim.split('').reduce((a, c) => a + c.charCodeAt(0), 0)
-  return AVATAR_RENKLER[hash % AVATAR_RENKLER.length]
-}
 function initials(isim: string) {
   return isim.split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase()
 }
@@ -235,20 +230,20 @@ export default function OgrencilerPage() {
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-2 mb-4">
+        <div className="flex flex-wrap gap-1.5 mb-4">
           <button onClick={() => setSinifFiltre(0)}
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-all ${
-              sinifFiltre === 0 ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300'
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+              sinifFiltre === 0 ? 'bg-slate-800 text-white' : 'bg-white text-slate-500 border border-gray-200 hover:bg-slate-50'
             }`}>
             Tüm Sınıflar
           </button>
-          {sinifSayilari.map(({ sinif, sayi }) => (
+          {sinifSayilari.filter(x => x.sayi > 0).map(({ sinif, sayi }) => (
             <button key={sinif} onClick={() => setSinifFiltre(sinif)}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-all ${
-                sinifFiltre === sinif ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300'
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                sinifFiltre === sinif ? 'bg-slate-800 text-white' : 'bg-white text-slate-500 border border-gray-200 hover:bg-slate-50'
               }`}>
               {sinif}. Sınıf
-              {sayi > 0 && <span className={`ml-1.5 text-xs px-1.5 py-0.5 rounded-full ${sinifFiltre === sinif ? 'bg-blue-500' : 'bg-gray-100 text-gray-500'}`}>{sayi}</span>}
+              <span className={`ml-1.5 text-xs px-1.5 py-0.5 rounded-full ${sinifFiltre === sinif ? 'bg-slate-600 text-white' : 'bg-slate-100 text-slate-500'}`}>{sayi}</span>
             </button>
           ))}
         </div>
@@ -266,20 +261,21 @@ export default function OgrencilerPage() {
               const toplamSayi = tumTaksitler.length
               const progress = toplamSayi > 0 ? Math.round((odenenSayi / toplamSayi) * 100) : 0
               return (
-                <div key={o.id} className={`bg-white rounded-2xl shadow-sm border transition-all hover:shadow-md ${tamOdendi ? 'border-green-200 ring-1 ring-green-100' : 'border-gray-100'}`}>
+                <div key={o.id} className="bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all">
                   <div className="p-4">
                     <div className="flex items-center gap-3 mb-3">
-                      <div className={`w-11 h-11 rounded-xl ${avatarRenk(o.ad_soyad)} flex items-center justify-center text-white font-bold text-sm shrink-0`}>
+                      <div className="w-9 h-9 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 text-xs font-semibold shrink-0">
                         {initials(o.ad_soyad)}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          <p className="font-semibold text-gray-800 text-sm truncate">{o.ad_soyad}</p>
-                          {tamOdendi && <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full shrink-0">✓ Ödendi</span>}
+                          <p className="font-medium text-slate-700 text-sm truncate">{o.ad_soyad}</p>
+                          {tamOdendi && <span className="text-xs bg-emerald-50 text-emerald-600 border border-emerald-200 px-1.5 py-0.5 rounded-md shrink-0">Ödendi</span>}
                         </div>
                         <div className="flex items-center gap-2 mt-0.5">
-                          <span className="text-xs text-gray-500">{o.sinif}. Sınıf</span>
-                          <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${o.ogrenci_tipi === 'kurs' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>
+                          <span className="text-xs text-slate-400">{o.sinif}. Sınıf</span>
+                          <span className="text-xs text-slate-400">·</span>
+                          <span className="text-xs text-slate-400">
                             {o.ogrenci_tipi === 'kurs' ? 'Kurs' : 'Deneme'}
                           </span>
                         </div>
@@ -296,29 +292,29 @@ export default function OgrencilerPage() {
 
                     {toplamSayi > 0 && (
                       <div className="mb-3">
-                        <div className="flex justify-between text-xs text-gray-400 mb-1">
+                        <div className="flex justify-between text-xs text-slate-400 mb-1">
                           <span>Ödeme</span>
-                          <span className={tamOdendi ? 'text-green-600 font-medium' : ''}>{odenenSayi}/{toplamSayi} taksit</span>
+                          <span>{odenenSayi}/{toplamSayi} taksit</span>
                         </div>
-                        <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                          <div className={`h-full rounded-full transition-all ${tamOdendi ? 'bg-green-500' : 'bg-blue-500'}`} style={{ width: `${progress}%` }} />
+                        <div className="h-1 bg-slate-100 rounded-full overflow-hidden">
+                          <div className={`h-full rounded-full transition-all ${tamOdendi ? 'bg-emerald-400' : 'bg-slate-400'}`} style={{ width: `${progress}%` }} />
                         </div>
                       </div>
                     )}
 
                     <div className="flex gap-1.5">
                       <Link href={`/ogrenciler/${o.id}`}
-                        className="flex-1 text-center text-xs bg-blue-600 text-white py-1.5 rounded-lg hover:bg-blue-700 font-medium">
+                        className="flex-1 text-center text-xs bg-slate-800 text-white py-1.5 rounded-lg hover:bg-slate-700 font-medium">
                         Detay
                       </Link>
                       {yetki && (
                         <>
                           <button onClick={() => duzenleAc(o)}
-                            className="text-xs bg-gray-100 text-gray-600 px-3 py-1.5 rounded-lg hover:bg-gray-200">
+                            className="text-xs text-slate-500 border border-gray-200 px-3 py-1.5 rounded-lg hover:bg-slate-50">
                             Düzenle
                           </button>
                           <button onClick={() => sil(o.id, o.ad_soyad)}
-                            className="text-xs bg-red-50 text-red-500 px-3 py-1.5 rounded-lg hover:bg-red-100">
+                            className="text-xs text-red-400 border border-red-100 px-3 py-1.5 rounded-lg hover:bg-red-50">
                             Sil
                           </button>
                         </>
